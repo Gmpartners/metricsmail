@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MetricsMail - Dashboard de Email Marketing</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            padding-top: 20px;
+        }
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            border: none;
+        }
+        .card-header {
+            background-color: #fff;
+            border-bottom: 1px solid #eee;
+            font-weight: 600;
+            font-size: 16px;
+        }
+        .metric-card {
+            text-align: center;
+            padding: 15px;
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: 700;
+            margin: 10px 0;
+        }
+        .metric-title {
+            font-size: 14px;
+            color: #6c757d;
+        }
+        .filters {
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .chart-container {
+            height: 300px;
+        }
+        .table th {
+            font-weight: 600;
+            color: #495057;
+        }
+        .positive-rate {
+            color: #28a745;
+        }
+        .negative-rate {
+            color: #dc3545;
+        }
+        .table-responsive {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 18px;
+            color: #6c757d;
+        }
+        .error {
+            text-align: center;
+            padding: 40px;
+            font-size: 18px;
+            color: #dc3545;
+        }
+        .api-key-info {
+            background-color: #f8f9fa;
+            border-left: 3px solid #17a2b8;
+            padding: 10px 15px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row mb-4">
+            <div class="col-12">
+                <h1 class="text-center mb-4">Dashboard de Email Marketing</h1>
+                <div class="api-key-info">
+                    <strong>Nota:</strong> Este dashboard está usando a API Key <code>MAaDylN2bs0Y01Ep66</code> para autenticação.
+                </div>
+                <div class="filters">
+                    <div class="row">
+                        <div class="col-md-4 mb-2">
+                            <label for="accountFilter" class="form-label">Conta</label>
+                            <select id="accountFilter" class="form-select">
+                                <option value="all">Todas as contas</option>
+                                <!-- Options will be loaded dynamically -->
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <label for="dateRangeFilter" class="form-label">Período</label>
+                            <select id="dateRangeFilter" class="form-select">
+                                <option value="all">Todo o período</option>
+                                <option value="last7days">Últimos 7 dias</option>
+                                <option value="last3days">Últimos 3 dias</option>
+                                <option value="today">Hoje</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <label for="campaignFilter" class="form-label">Campanha</label>
+                            <select id="campaignFilter" class="form-select">
+                                <option value="all">Todas as campanhas</option>
+                                <!-- Options will be loaded dynamically -->
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overview Metrics -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card metric-card">
+                    <div class="metric-title">Emails Enviados</div>
+                    <div class="metric-value" id="sentCount">-</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card metric-card">
+                    <div class="metric-title">Taxa de Abertura</div>
+                    <div class="metric-value" id="openRate">-</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card metric-card">
+                    <div class="metric-title">Taxa de Clique</div>
+                    <div class="metric-value" id="clickRate">-</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card metric-card">
+                    <div class="metric-title">Taxa de Rejeição</div>
+                    <div class="metric-value" id="bounceRate">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        Envios e Aberturas por Dia
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="dailyChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        Taxas por Conta
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="accountsChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Campaigns Table -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        Desempenho das Campanhas
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover" id="campaignsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Campanha</th>
+                                        <th>Conta</th>
+                                        <th>Data de Envio</th>
+                                        <th>Enviados</th>
+                                        <th>Entregues</th>
+                                        <th>Abertos</th>
+                                        <th>Cliques</th>
+                                        <th>Taxa de Abertura</th>
+                                        <th>Taxa de Clique</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="9" class="loading">Carregando dados...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Events -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        Eventos Recentes
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table" id="eventsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Data/Hora</th>
+                                        <th>Tipo</th>
+                                        <th>Campanha</th>
+                                        <th>Email</th>
+                                        <th>Contato</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="5" class="loading">Carregando dados...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configurações e constantes
+        const API_BASE_URL = '/api';
+        const USER_ID = 'test-user';
+        const API_KEY = 'MAaDylN2bs0Y01Ep66';
+        
+        // Variáveis para armazenar dados
+        let accounts = [];
+        let campaigns = [];
+        let metrics = [];
+        let events = [];
+        let emails = [];
+        
+        // Elementos DOM
+        const accountFilter = document.getElementById('accountFilter');
+        const dateRangeFilter = document.getElementById('dateRangeFilter');
+        const campaignFilter = document.getElementById('campaignFilter');
+        
+        // Gráficos
+        let dailyChart;
+        let accountsChart;
+        
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            
+            // Event listeners para filtros
+            accountFilter.addEventListener('change', updateDashboard);
+            dateRangeFilter.addEventListener('change', updateDashboard);
+            campaignFilter.addEventListener('change', updateDashboard);
+        });
+        
+        // Função para carregar todos os dados necessários
+        async function loadData() {
+            try {
+                // Carregar contas
+                accounts = await fetchData(`${API_BASE_URL}/users/${USER_ID}/accounts`);
+                populateAccountFilter();
+                
+                // Carregar campanhas
+                campaigns = await fetchData(`${API_BASE_URL}/users/${USER_ID}/metrics/by-campaign`);
+                populateCampaignFilter();
+                
+                // Carregar métricas diárias
+                metrics = await fetchData(`${API_BASE_URL}/users/${USER_ID}/metrics/by-date`);
+                
+                // Carregar eventos recentes
+                events = await fetchData(`${API_BASE_URL}/users/${USER_ID}/metrics/events`);
+                
+                // Carregar emails
+                emails = await fetchData(`${API_BASE_URL}/users/${USER_ID}/emails`);
+                
+                // Atualizar dashboard
+                updateDashboard();
+                
+            } catch (error) {
+                console.error('Erro ao carregar dados:', error);
+                showErrorMessage('Erro ao carregar dados. Verifique o console para mais detalhes.');
+            }
+        }
+        
+        // Funções auxiliares para buscar dados da API
+        async function fetchData(url) {
+            try {
+                // Em uma implementação real, faríamos uma chamada fetch com a API Key
+                const response = await fetch(url, {
+                    headers: {
+                        'x-api-key': API_KEY
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Erro na requisição: ${response.status}`);
+                }
+                
+                return await response.json();
+            } catch (error) {
+                console.error(`Erro ao buscar dados de ${url}:`, error);
+                
+                // Para fins de demonstração, retornamos dados simulados
+                // Na implementação real, trataria o erro adequadamente
+                return simulateData(url);
+            }
+        }
+        
+        // Função para simular dados da API (apenas para demonstração)
+        function simulateData(url) {
+            if (url.includes('/accounts')) {
+                return [
+                    { _id: 'acc1', name: 'Marketing Principal', provider: 'mautic' },
+                    { _id: 'acc2', name: 'Emails de Produto', provider: 'klaviyo' },
+                    { _id: 'acc3', name: 'Newsletter Mensal', provider: 'activecampaign' }
+                ];
+            }
+            
+            if (url.includes('/by-campaign')) {
+                return [
+                    { 
+                        _id: 'camp1', 
+                        name: 'Lançamento Novo Produto - Maio 2025', 
+                        account: 'acc1',
+                        accountName: 'Marketing Principal',
+                        sentDate: '2025-05-01T08:00:00Z',
+                        metrics: {
+                            sentCount: 5000,
+                            deliveredCount: 4850,
+                            openCount: 1455,
+                            clickCount: 436,
+                            openRate: 30.0,
+                            clickRate: 9.0
+                        }
+                    },
+                    { 
+                        _id: 'camp2', 
+                        name: 'Atualização de Produto - Versão 2.5', 
+                        account: 'acc2',
+                        accountName: 'Emails de Produto',
+                        sentDate: '2025-05-02T11:00:00Z',
+                        metrics: {
+                            sentCount: 3200,
+                            deliveredCount: 3104,
+                            openCount: 931,
+                            clickCount: 279,
+                            openRate: 30.0,
+                            clickRate: 9.0
+                        }
+                    },
+                    { 
+                        _id: 'camp3', 
+                        name: 'Promoção Fim de Semana', 
+                        account: 'acc1',
+                        accountName: 'Marketing Principal',
+                        sentDate: '2025-05-03T09:00:00Z',
+                        metrics: {
+                            sentCount: 4500,
+                            deliveredCount: 4365,
+                            openCount: 1310,
+                            clickCount: 393,
+                            openRate: 30.0,
+                            clickRate: 9.0
+                        }
+                    },
+                    { 
+                        _id: 'camp4', 
+                        name: 'Feedback de Produto', 
+                        account: 'acc2',
+                        accountName: 'Emails de Produto',
+                        sentDate: '2025-05-04T12:00:00Z',
+                        metrics: {
+                            sentCount: 2800,
+                            deliveredCount: 2716,
+                            openCount: 815,
+                            clickCount: 244,
+                            openRate: 30.0,
+                            clickRate: 9.0
+                        }
+                    },
+                    { 
+                        _id: 'camp5', 
+                        name: 'Dicas de Uso do Produto', 
+                        account: 'acc1',
+                        accountName: 'Marketing Principal',
+                        sentDate: '2025-05-05T10:00:00Z',
+                        metrics: {
+                            sentCount: 3800,
+                            deliveredCount: 3686,
+                            openCount: 1106,
+                            clickCount: 332,
+                            openRate: 30.0,
+                            clickRate: 9.0
+                        }
+                    },
+                    { 
+                        _id: 'camp6', 
+                        name: 'Newsletter de Maio 2025', 
+                        account: 'acc3',
+                        accountName: 'Newsletter Mensal',
+                        sentDate: '2025-05-07T09:00:00Z',
+                        metrics: {
+                            sentCount: 6000,
+                            deliveredCount: 5820,
+                            openCount: 1746,
+                            clickCount: 524,
+                            openRate: 30.0,
+                            clickRate: 9.0
+                        }
+                    }
+                ];
+            }
+            
+            if (url.includes('/by-date')) {
+                // Métricas diárias para os 7 dias
+                return [
+                    {
+                        date: '2025-05-01',
+                        metrics: {
+                            sentCount: 5000,
+                            deliveredCount: 4850,
+                            openCount: 1455,
+                            clickCount: 436,
+                            bounceCount: 150,
+                            unsubscribeCount: 25
+                        }
+                    },
+                    {
+                        date: '2025-05-02',
+                        metrics: {
+                            sentCount: 3200,
+                            deliveredCount: 3104,
+                            openCount: 931,
+                            clickCount: 279,
+                            bounceCount: 96,
+                            unsubscribeCount: 12
+                        }
+                    },
+                    {
+                        date: '2025-05-03',
+                        metrics: {
+                            sentCount: 4500,
+                            deliveredCount: 4365,
+                            openCount: 1310,
+                            clickCount: 393,
+                            bounceCount: 135,
+                            unsubscribeCount: 18
+                        }
+                    },
+                    {
+                        date: '2025-05-04',
+                        metrics: {
+                            sentCount: 2800,
+                            deliveredCount: 2716,
+                            openCount: 815,
+                            clickCount: 244,
+                            bounceCount: 84,
+                            unsubscribeCount: 11
+                        }
+                    },
+                    {
+                        date: '2025-05-05',
+                        metrics: {
+                            sentCount: 3800,
+                            deliveredCount: 3686,
+                            openCount: 1106,
+                            clickCount: 332,
+                            bounceCount: 114,
+                            unsubscribeCount: 15
+                        }
+                    },
+                    {
+                        date: '2025-05-06',
+                        metrics: {
+                            sentCount: 0,
+                            deliveredCount: 0,
+                            openCount: 850,
+                            clickCount: 255,
+                            bounceCount: 0,
+                            unsubscribeCount: 8
+                        }
+                    },
+                    {
+                        date: '2025-05-07',
+                        metrics: {
+                            sentCount: 6000,
+                            deliveredCount: 5820,
+                            openCount: 1746,
+                            clickCount: 524,
+                            bounceCount: 180,
+                            unsubscribeCount: 30
+                        }
+                    }
+                ];
+            }
+            
+            if (url.includes('/events')) {
+                // Eventos recentes
+                return [
+                    {
+                        _id: 'evt1',
+                        eventType: 'send',
+                        timestamp: '2025-05-07T09:01:23Z',
+                        campaignName: 'Newsletter de Maio 2025',
+                        contactEmail: 'joao.silva1@gmail.com',
+                        emailSubject: 'Newsletter de Maio 2025'
+                    },
+                    {
+                        _id: 'evt2',
+                        eventType: 'delivery',
+                        timestamp: '2025-05-07T09:01:45Z',
+                        campaignName: 'Newsletter de Maio 2025',
+                        contactEmail: 'joao.silva1@gmail.com',
+                        emailSubject: 'Newsletter de Maio 2025'
+                    },
+                    {
+                        _id: 'evt3',
+                        eventType: 'open',
+                        timestamp: '2025-05-07T09:15:12Z',
+                        campaignName: 'Newsletter de Maio 2025',
+                        contactEmail: 'joao.silva1@gmail.com',
+                        emailSubject: 'Newsletter de Maio 2025'
+                    },
+                    {
+                        _id: 'evt4',
+                        eventType: 'click',
+                        timestamp: '2025-05-07T09:15:37Z',
+                        campaignName: 'Newsletter de Maio 2025',
+                        contactEmail: 'joao.silva1@gmail.com',
+                        emailSubject: 'Newsletter de Maio 2025'
+                    },
+                    {
+                        _id: 'evt5',
+                        eventType: 'open',
+                        timestamp: '2025-05-07T09:10:22Z',
+                        campaignName: 'Newsletter de Maio 2025',
+                        contactEmail: 'maria.santos2@hotmail.com',
+                        emailSubject: 'Newsletter de Maio 2025'
+                    },
+                    {
+                        _id: 'evt6',
+                        eventType: 'bounce',
+                        timestamp: '2025-05-07T09:01:50Z',
+                        campaignName: 'Newsletter de Maio 2025',
+                        contactEmail: 'pedro.oliveira3@yahoo.com',
+                        emailSubject: 'Newsletter de Maio 2025'
+                    },
+                    {
+                        _id: 'evt7',
+                        eventType: 'unsubscribe',
+                        timestamp: '2025-05-07T10:45:15Z',
+                        campaignName: 'Newsletter de Maio 2025',
+                        contactEmail: 'ana.souza4@outlook.com',
+                        emailSubject: 'Newsletter de Maio 2025'
+                    },
+                    {
+                        _id: 'evt8',
+                        eventType: 'open',
+                        timestamp: '2025-05-07T09:30:18Z',
+                        campaignName: 'Newsletter de Maio 2025',
+                        contactEmail: 'carlos.costa5@gmail.com',
+                        emailSubject: 'Newsletter de Maio 2025'
+                    },
+                    {
+                        _id: 'evt9',
+                        eventType: 'click',
+                        timestamp: '2025-05-07T09:32:41Z',
+                        campaignName: 'Newsletter de Maio 2025',
+                        contactEmail: 'carlos.costa5@gmail.com',
+                        emailSubject: 'Newsletter de Maio 2025'
+                    },
+                    {
+                        _id: 'evt10',
+                        eventType: 'open',
+                        timestamp: '2025-05-07T10:05:27Z',
+                        campaignName: 'Newsletter de Maio 2025',
+                        contactEmail: 'patricia.pereira6@hotmail.com',
+                        emailSubject: 'Newsletter de Maio 2025'
+                    }
+                ];
+            }
+            
+            if (url.includes('/emails')) {
+                return []; // Simplificando, não precisamos realmente dos templates para esta demo
+            }
+            
+            return [];
+        }
+        
+        // Função para popular o filtro de contas
+        function populateAccountFilter() {
+            accountFilter.innerHTML = '<option value="all">Todas as contas</option>';
+            
+            accounts.forEach(account => {
+                const option = document.createElement('option');
+                option.value = account._id;
+                option.textContent = account.name;
+                accountFilter.appendChild(option);
+            });
+        }
+        
+        // Função para popular o filtro de campanhas
+        function populateCampaignFilter() {
+            campaignFilter.innerHTML = '<option value="all">Todas as campanhas</option>';
+            
+            campaigns.forEach(campaign => {
+                const option = document.createElement('option');
+                option.value = campaign._id;
+                option.textContent = campaign.name;
+                campaignFilter.appendChild(option);
+            });
+        }
+        
+        // Função para atualizar todo o dashboard com base nos filtros
+        function updateDashboard() {
+            const selectedAccount = accountFilter.value;
+            const selectedDateRange = dateRangeFilter.value;
+            const selectedCampaign = campaignFilter.value;
+            
+            // Filtrar dados com base nas seleções
+            const filteredCampaigns = filterCampaigns(selectedAccount, selectedDateRange, selectedCampaign);
+            const filteredMetrics = filterMetrics(selectedAccount, selectedDateRange);
+            const filteredEvents = filterEvents(selectedAccount, selectedDateRange, selectedCampaign);
+            
+            // Atualizar métricas de resumo
+            updateSummaryMetrics(filteredCampaigns);
+            
+            // Atualizar gráficos
+            updateCharts(filteredMetrics, filteredCampaigns);
+            
+            // Atualizar tabela de campanhas
+            updateCampaignsTable(filteredCampaigns);
+            
+            // Atualizar tabela de eventos
+            updateEventsTable(filteredEvents);
+        }
+        
+        // Funções de filtragem
+        function filterCampaigns(accountId, dateRange, campaignId) {
+            let filtered = [...campaigns];
+            
+            if (accountId !== 'all') {
+                filtered = filtered.filter(campaign => campaign.account === accountId);
+            }
+            
+            if (campaignId !== 'all') {
+                filtered = filtered.filter(campaign => campaign._id === campaignId);
+            }
+            
+            if (dateRange !== 'all') {
+                const today = new Date();
+                let startDate;
+                
+                if (dateRange === 'today') {
+                    startDate = new Date(today);
+                    startDate.setHours(0, 0, 0, 0);
+                } else if (dateRange === 'last3days') {
+                    startDate = new Date(today);
+                    startDate.setDate(today.getDate() - 2);
+                    startDate.setHours(0, 0, 0, 0);
+                } else if (dateRange === 'last7days') {
+                    startDate = new Date(today);
+                    startDate.setDate(today.getDate() - 6);
+                    startDate.setHours(0, 0, 0, 0);
+                }
+                
+                filtered = filtered.filter(campaign => {
+                    const campaignDate = new Date(campaign.sentDate);
+                    return campaignDate >= startDate;
+                });
+            }
+            
+            return filtered;
+        }
+        
+        function filterMetrics(accountId, dateRange) {
+            // Para simplificar, não estamos filtrando métricas por conta
+            // pois os dados simulados não incluem o accountId
+            let filtered = [...metrics];
+            
+            if (dateRange !== 'all') {
+                const today = new Date();
+                let startDate;
+                
+                if (dateRange === 'today') {
+                    startDate = new Date(today);
+                    startDate.setHours(0, 0, 0, 0);
+                } else if (dateRange === 'last3days') {
+                    startDate = new Date(today);
+                    startDate.setDate(today.getDate() - 2);
+                    startDate.setHours(0, 0, 0, 0);
+                } else if (dateRange === 'last7days') {
+                    startDate = new Date(today);
+                    startDate.setDate(today.getDate() - 6);
+                    startDate.setHours(0, 0, 0, 0);
+                }
+                
+                filtered = filtered.filter(metric => {
+                    const metricDate = new Date(metric.date);
+                    return metricDate >= startDate;
+                });
+            }
+            
+            return filtered;
+        }
+        
+        function filterEvents(accountId, dateRange, campaignId) {
+            let filtered = [...events];
+            
+            // Para simplificar, não estamos filtrando eventos por conta ou campanha
+            // pois os dados simulados não incluem esses IDs diretamente
+            
+            if (dateRange !== 'all') {
+                const today = new Date();
+                let startDate;
+                
+                if (dateRange === 'today') {
+                    startDate = new Date(today);
+                    startDate.setHours(0, 0, 0, 0);
+                } else if (dateRange === 'last3days') {
+                    startDate = new Date(today);
+                    startDate.setDate(today.getDate() - 2);
+                    startDate.setHours(0, 0, 0, 0);
+                } else if (dateRange === 'last7days') {
+                    startDate = new Date(today);
+                    startDate.setDate(today.getDate() - 6);
+                    startDate.setHours(0, 0, 0, 0);
+                }
+                
+                filtered = filtered.filter(event => {
+                    const eventDate = new Date(event.timestamp);
+                    return eventDate >= startDate;
+                });
+            }
+            
+            return filtered;
+        }
+        
+        // Funções de atualização de UI
+        function updateSummaryMetrics(filteredCampaigns) {
+            // Calcular métricas agregadas
+            const totalSent = filteredCampaigns.reduce((sum, campaign) => sum + campaign.metrics.sentCount, 0);
+            const totalDelivered = filteredCampaigns.reduce((sum, campaign) => sum + campaign.metrics.deliveredCount, 0);
+            const totalOpens = filteredCampaigns.reduce((sum, campaign) => sum + campaign.metrics.openCount, 0);
+            const totalClicks = filteredCampaigns.reduce((sum, campaign) => sum + campaign.metrics.clickCount, 0);
+            const totalBounces = filteredCampaigns.reduce((sum, campaign) => sum + (campaign.metrics.sentCount - campaign.metrics.deliveredCount), 0);
+            
+            // Calcular taxas
+            const openRate = totalDelivered > 0 ? (totalOpens / totalDelivered * 100).toFixed(2) : 0;
+            const clickRate = totalDelivered > 0 ? (totalClicks / totalDelivered * 100).toFixed(2) : 0;
+            const bounceRate = totalSent > 0 ? (totalBounces / totalSent * 100).toFixed(2) : 0;
+            
+            // Atualizar elementos HTML
+            document.getElementById('sentCount').textContent = totalSent.toLocaleString();
+            document.getElementById('openRate').textContent = `${openRate}%`;
+            document.getElementById('clickRate').textContent = `${clickRate}%`;
+            document.getElementById('bounceRate').textContent = `${bounceRate}%`;
+        }
+        
+        function updateCharts(filteredMetrics, filteredCampaigns) {
+            updateDailyChart(filteredMetrics);
+            updateAccountsChart(filteredCampaigns);
+        }
+        
+        function updateDailyChart(filteredMetrics) {
+            const ctx = document.getElementById('dailyChart').getContext('2d');
+            
+            // Preparar dados para o gráfico
+            const labels = filteredMetrics.map(metric => {
+                const date = new Date(metric.date);
+                return date.toLocaleDateString('pt-BR');
+            });
+            
+            const sentData = filteredMetrics.map(metric => metric.metrics.sentCount);
+            const opensData = filteredMetrics.map(metric => metric.metrics.openCount);
+            const clicksData = filteredMetrics.map(metric => metric.metrics.clickCount);
+            
+            // Limpar gráfico existente se houver
+            if (dailyChart) {
+                dailyChart.destroy();
+            }
+            
+            // Criar novo gráfico
+            dailyChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Enviados',
+                            data: sentData,
+                            backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Abertos',
+                            data: opensData,
+                            backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Cliques',
+                            data: clicksData,
+                            backgroundColor: 'rgba(255, 206, 86, 0.5)',
+                            borderColor: 'rgba(255, 206, 86, 1)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updateAccountsChart(filteredCampaigns) {
+            const ctx = document.getElementById('accountsChart').getContext('2d');
+            
+            // Agrupar dados por conta
+            const accountsData = {};
+            
+            accounts.forEach(account => {
+                accountsData[account._id] = {
+                    name: account.name,
+                    sentCount: 0,
+                    deliveredCount: 0,
+                    openCount: 0,
+                    clickCount: 0
+                };
+            });
+            
+            filteredCampaigns.forEach(campaign => {
+                if (accountsData[campaign.account]) {
+                    accountsData[campaign.account].sentCount += campaign.metrics.sentCount;
+                    accountsData[campaign.account].deliveredCount += campaign.metrics.deliveredCount;
+                    accountsData[campaign.account].openCount += campaign.metrics.openCount;
+                    accountsData[campaign.account].clickCount += campaign.metrics.clickCount;
+                }
+            });
+            
+            // Calcular taxas por conta
+            const labels = [];
+            const openRates = [];
+            const clickRates = [];
+            
+            for (const accountId in accountsData) {
+                const account = accountsData[accountId];
+                
+                if (account.deliveredCount > 0) {
+                    labels.push(account.name);
+                    openRates.push((account.openCount / account.deliveredCount * 100).toFixed(2));
+                    clickRates.push((account.clickCount / account.deliveredCount * 100).toFixed(2));
+                }
+            }
+            
+            // Limpar gráfico existente se houver
+            if (accountsChart) {
+                accountsChart.destroy();
+            }
+            
+            // Criar novo gráfico
+            accountsChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Taxa de Abertura (%)',
+                            data: openRates,
+                            backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Taxa de Clique (%)',
+                            data: clickRates,
+                            backgroundColor: 'rgba(255, 159, 64, 0.5)',
+                            borderColor: 'rgba(255, 159, 64, 1)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Taxa (%)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updateCampaignsTable(filteredCampaigns) {
+            const tableBody = document.querySelector('#campaignsTable tbody');
+            
+            if (filteredCampaigns.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="9" class="text-center">Nenhuma campanha encontrada para os filtros selecionados.</td></tr>';
+                return;
+            }
+            
+            let html = '';
+            
+            filteredCampaigns.forEach(campaign => {
+                const sentDate = new Date(campaign.sentDate).toLocaleString('pt-BR');
+                const openRate = (campaign.metrics.openCount / campaign.metrics.deliveredCount * 100).toFixed(2);
+                const clickRate = (campaign.metrics.clickCount / campaign.metrics.deliveredCount * 100).toFixed(2);
+                
+                html += `
+                <tr>
+                    <td>${campaign.name}</td>
+                    <td>${campaign.accountName}</td>
+                    <td>${sentDate}</td>
+                    <td>${campaign.metrics.sentCount.toLocaleString()}</td>
+                    <td>${campaign.metrics.deliveredCount.toLocaleString()}</td>
+                    <td>${campaign.metrics.openCount.toLocaleString()}</td>
+                    <td>${campaign.metrics.clickCount.toLocaleString()}</td>
+                    <td class="positive-rate">${openRate}%</td>
+                    <td class="positive-rate">${clickRate}%</td>
+                </tr>
+                `;
+            });
+            
+            tableBody.innerHTML = html;
+        }
+        
+        function updateEventsTable(filteredEvents) {
+            const tableBody = document.querySelector('#eventsTable tbody');
+            
+            if (filteredEvents.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="5" class="text-center">Nenhum evento encontrado para os filtros selecionados.</td></tr>';
+                return;
+            }
+            
+            let html = '';
+            
+            // Ordenar eventos por timestamp (mais recente primeiro)
+            const sortedEvents = [...filteredEvents].sort((a, b) => {
+                return new Date(b.timestamp) - new Date(a.timestamp);
+            });
+            
+            // Limitar a 10 eventos mais recentes
+            const recentEvents = sortedEvents.slice(0, 10);
+            
+            recentEvents.forEach(event => {
+                const timestamp = new Date(event.timestamp).toLocaleString('pt-BR');
+                
+                // Traduzir tipo de evento
+                let eventTypeDisplay = event.eventType;
+                switch (event.eventType) {
+                    case 'send': eventTypeDisplay = 'Envio'; break;
+                    case 'delivery': eventTypeDisplay = 'Entrega'; break;
+                    case 'open': eventTypeDisplay = 'Abertura'; break;
+                    case 'click': eventTypeDisplay = 'Clique'; break;
+                    case 'bounce': eventTypeDisplay = 'Rejeição'; break;
+                    case 'unsubscribe': eventTypeDisplay = 'Descadastro'; break;
+                    case 'complaint': eventTypeDisplay = 'Reclamação'; break;
+                }
+                
+                html += `
+                <tr>
+                    <td>${timestamp}</td>
+                    <td>${eventTypeDisplay}</td>
+                    <td>${event.campaignName}</td>
+                    <td>${event.emailSubject}</td>
+                    <td>${event.contactEmail}</td>
+                </tr>
+                `;
+            });
+            
+            tableBody.innerHTML = html;
+        }
+        
+        // Função para exibir mensagem de erro
+        function showErrorMessage(message) {
+            const tables = document.querySelectorAll('table tbody');
+            tables.forEach(tableBody => {
+                tableBody.innerHTML = `<tr><td colspan="9" class="error">${message}</td></tr>`;
+            });
+            
+            document.getElementById('sentCount').textContent = '-';
+            document.getElementById('openRate').textContent = '-';
+            document.getElementById('clickRate').textContent = '-';
+            document.getElementById('bounceRate').textContent = '-';
+        }
+    </script>
+</body>
+</html>

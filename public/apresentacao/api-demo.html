@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo de Integração com API</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <style>
+        pre {
+            background-color: #f8f8f8;
+            padding: 15px;
+            border-radius: 4px;
+            overflow: auto;
+            font-family: monospace;
+            margin-bottom: 20px;
+        }
+        .endpoint {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        .endpoint h3 {
+            margin-top: 0;
+            color: #2c7be5;
+        }
+        .endpoint p {
+            margin-bottom: 15px;
+        }
+        .method {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .get {
+            background-color: #61affe;
+        }
+        .post {
+            background-color: #49cc90;
+        }
+        .delete {
+            background-color: #f93e3e;
+        }
+        .put {
+            background-color: #fca130;
+        }
+        .error {
+            color: #f93e3e;
+        }
+        .panel-nav {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .panel-nav a {
+            margin-right: 15px;
+            text-decoration: none;
+            color: #2c7be5;
+            padding: 5px 0;
+        }
+        .panel-nav a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Teste de API - Dashboard de Email Marketing</h1>
+        
+        <div class="panel-nav">
+            <a href="index.html">Voltar ao Dashboard</a>
+            <a href="/api">Endpoint Raiz da API</a>
+        </div>
+
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <h3>/api/metrics/daily-sends</h3>
+            <p>Este endpoint retorna os envios diários de emails no período de 01/05/2025 a 07/05/2025.</p>
+            <button class="btn" onclick="fetchEndpoint('/api/metrics/daily-sends', 'daily-sends-result')">Testar Endpoint</button>
+            <div class="result">
+                <pre id="daily-sends-result">// Resultado da requisição aparecerá aqui</pre>
+            </div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <h3>/api/metrics/daily-opens</h3>
+            <p>Este endpoint retorna as aberturas diárias de emails no período de 01/05/2025 a 07/05/2025.</p>
+            <button class="btn" onclick="fetchEndpoint('/api/metrics/daily-opens', 'daily-opens-result')">Testar Endpoint</button>
+            <div class="result">
+                <pre id="daily-opens-result">// Resultado da requisição aparecerá aqui</pre>
+            </div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <h3>/api/metrics/by-date</h3>
+            <p>Este endpoint retorna métricas agregadas por data no período de 01/05/2025 a 07/05/2025.</p>
+            <button class="btn" onclick="fetchEndpoint('/api/metrics/by-date?start=2025-05-01&end=2025-05-07', 'by-date-result')">Testar Endpoint</button>
+            <div class="result">
+                <pre id="by-date-result">// Resultado da requisição aparecerá aqui</pre>
+            </div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <h3>/api/metrics/rates</h3>
+            <p>Este endpoint retorna as taxas de abertura, clique, bounce e unsubscribe.</p>
+            <button class="btn" onclick="fetchEndpoint('/api/metrics/rates', 'rates-result')">Testar Endpoint</button>
+            <div class="result">
+                <pre id="rates-result">// Resultado da requisição aparecerá aqui</pre>
+            </div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <h3>/api/accounts</h3>
+            <p>Este endpoint retorna as contas configuradas.</p>
+            <button class="btn" onclick="fetchEndpoint('/api/accounts', 'accounts-result')">Testar Endpoint</button>
+            <div class="result">
+                <pre id="accounts-result">// Resultado da requisição aparecerá aqui</pre>
+            </div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method post">POST</span>
+            <h3>/api/accounts</h3>
+            <p>Este endpoint cria uma nova conta.</p>
+            <button class="btn" onclick="createAccount()">Criar Conta de Teste</button>
+            <div class="result">
+                <pre id="create-account-result">// Resultado da requisição aparecerá aqui</pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Função para simular requisições para a API
+        async function fetchEndpoint(url, resultElementId) {
+            const resultElement = document.getElementById(resultElementId);
+            resultElement.textContent = 'Carregando...';
+            resultElement.className = '';
+            
+            try {
+                // Simulação de resposta com base no endpoint
+                let responseData;
+                
+                if (url.includes('daily-sends')) {
+                    responseData = {
+                        success: true,
+                        data: [
+                            { date: '2025-05-01', count: 88 },
+                            { date: '2025-05-02', count: 64 },
+                            { date: '2025-05-03', count: 102 },
+                            { date: '2025-05-04', count: 66 },
+                            { date: '2025-05-05', count: 56 },
+                            { date: '2025-05-06', count: 366 },
+                            { date: '2025-05-07', count: 54 }
+                        ]
+                    };
+                } else if (url.includes('daily-opens')) {
+                    responseData = {
+                        success: true,
+                        data: [
+                            { date: '2025-05-01', count: 20 },
+                            { date: '2025-05-02', count: 19 },
+                            { date: '2025-05-03', count: 28 },
+                            { date: '2025-05-04', count: 22 },
+                            { date: '2025-05-05', count: 11 },
+                            { date: '2025-05-06', count: 90 },
+                            { date: '2025-05-07', count: 13 }
+                        ]
+                    };
+                } else if (url.includes('by-date')) {
+                    responseData = {
+                        success: true,
+                        data: [
+                            {
+                                date: '2025-05-01',
+                                metrics: {
+                                    sentCount: 88,
+                                    openCount: 20,
+                                    clickCount: 6,
+                                    bounceCount: 0,
+                                    unsubscribeCount: 1,
+                                    openRate: 22.73,
+                                    clickRate: 6.82
+                                }
+                            },
+                            {
+                                date: '2025-05-02',
+                                metrics: {
+                                    sentCount: 64,
+                                    openCount: 19,
+                                    clickCount: 4,
+                                    bounceCount: 0,
+                                    unsubscribeCount: 0,
+                                    openRate: 29.69,
+                                    clickRate: 6.25
+                                }
+                            },
+                            {
+                                date: '2025-05-03',
+                                metrics: {
+                                    sentCount: 102,
+                                    openCount: 28,
+                                    clickCount: 4,
+                                    bounceCount: 0,
+                                    unsubscribeCount: 1,
+                                    openRate: 27.45,
+                                    clickRate: 3.92
+                                }
+                            },
+                            {
+                                date: '2025-05-04',
+                                metrics: {
+                                    sentCount: 66,
+                                    openCount: 22,
+                                    clickCount: 3,
+                                    bounceCount: 0,
+                                    unsubscribeCount: 0,
+                                    openRate: 33.33,
+                                    clickRate: 4.55
+                                }
+                            },
+                            {
+                                date: '2025-05-05',
+                                metrics: {
+                                    sentCount: 56,
+                                    openCount: 11,
+                                    clickCount: 2,
+                                    bounceCount: 0,
+                                    unsubscribeCount: 0,
+                                    openRate: 19.64,
+                                    clickRate: 3.57
+                                }
+                            },
+                            {
+                                date: '2025-05-06',
+                                metrics: {
+                                    sentCount: 366,
+                                    openCount: 90,
+                                    clickCount: 24,
+                                    bounceCount: 0,
+                                    unsubscribeCount: 2,
+                                    openRate: 24.59,
+                                    clickRate: 6.56
+                                }
+                            },
+                            {
+                                date: '2025-05-07',
+                                metrics: {
+                                    sentCount: 54,
+                                    openCount: 13,
+                                    clickCount: 0,
+                                    bounceCount: 0,
+                                    unsubscribeCount: 0,
+                                    openRate: 24.07,
+                                    clickRate: 0.00
+                                }
+                            }
+                        ]
+                    };
+                } else if (url.includes('rates')) {
+                    responseData = {
+                        success: true,
+                        data: {
+                            openRate: 25.93,
+                            clickRate: 4.81,
+                            clickToOpenRate: 18.55,
+                            bounceRate: 0.00,
+                            unsubscribeRate: 0.36
+                        }
+                    };
+                } else if (url.includes('accounts')) {
+                    responseData = {
+                        success: true,
+                        data: [
+                            {
+                                _id: '6123e8912f78c9a01b987654',
+                                name: 'Conta Mautic Principal',
+                                provider: 'mautic',
+                                url: 'https://mautic.example.com',
+                                status: 'active',
+                                lastSync: '2025-05-01T08:30:45Z',
+                                isConnected: true,
+                                createdAt: '2025-01-15T10:00:00Z',
+                                updatedAt: '2025-05-01T08:30:45Z'
+                            },
+                            {
+                                _id: '6123e8912f78c9a01b987655',
+                                name: 'Conta Mailchimp Marketing',
+                                provider: 'mailchimp',
+                                url: 'https://mailchimp-api.example.com',
+                                status: 'active',
+                                lastSync: '2025-05-01T09:15:22Z',
+                                isConnected: true,
+                                createdAt: '2025-02-10T14:22:00Z',
+                                updatedAt: '2025-05-01T09:15:22Z'
+                            }
+                        ]
+                    };
+                } else {
+                    responseData = {
+                        success: true,
+                        message: 'Endpoint simulado com sucesso'
+                    };
+                }
+                
+                // Simulação de delay de rede
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                resultElement.textContent = JSON.stringify(responseData, null, 2);
+            } catch (error) {
+                resultElement.textContent = `Erro ao fazer requisição: ${error.message}\n\nVerifique se o servidor está rodando.`;
+                resultElement.classList.add('error');
+            }
+        }
+        
+        // Função para simular a criação de uma conta
+        async function createAccount() {
+            const resultElement = document.getElementById('create-account-result');
+            resultElement.textContent = 'Enviando dados...';
+            resultElement.className = '';
+            
+            const newAccount = {
+                name: 'Conta de Teste ' + new Date().toISOString().slice(0, 10),
+                provider: 'mautic',
+                url: 'https://mautic-teste.example.com',
+                username: 'testuser',
+                password: 'testpassword'
+            };
+            
+            try {
+                // Simulação de delay de rede
+                await new Promise(resolve => setTimeout(resolve, 700));
+                
+                const responseData = {
+                    success: true,
+                    message: 'Conta criada com sucesso',
+                    data: {
+                        _id: '6123e8912f78c9a01b' + Math.floor(Math.random() * 1000000),
+                        name: newAccount.name,
+                        provider: newAccount.provider,
+                        url: newAccount.url,
+                        status: 'inactive',
+                        isConnected: false,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    }
+                };
+                
+                resultElement.textContent = JSON.stringify(responseData, null, 2);
+            } catch (error) {
+                resultElement.textContent = `Erro ao criar conta: ${error.message}\n\nVerifique se o servidor está rodando.`;
+                resultElement.classList.add('error');
+            }
+        }
+    </script>
+</body>
+</html>

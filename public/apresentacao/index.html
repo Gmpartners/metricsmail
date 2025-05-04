@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Email Marketing</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="dashboard-header">
+            <h1>Dashboard de Email Marketing</h1>
+            <div>
+                <button class="btn" onclick="exportToCSV()">Exportar CSV</button>
+                <button class="btn" onclick="fetchDemoData()">Atualizar Dados</button>
+            </div>
+        </div>
+
+        <div class="stats-container">
+            <div class="stat-card">
+                <h3>Emails Enviados</h3>
+                <div class="stat-value" id="emails-sent">--</div>
+            </div>
+            <div class="stat-card">
+                <h3>Taxa de Abertura</h3>
+                <div class="stat-value" id="open-rate">--</div>
+            </div>
+            <div class="stat-card">
+                <h3>Taxa de Clique</h3>
+                <div class="stat-value" id="click-rate">--</div>
+            </div>
+            <div class="stat-card">
+                <h3>Último Envio</h3>
+                <div class="stat-value" id="last-send">--</div>
+            </div>
+        </div>
+
+        <div class="filters-container">
+            <div class="filter-group">
+                <label for="campaign-name">Nome da campanha</label>
+                <select id="campaign-name">
+                    <option value="all" selected>Todos</option>
+                    <option value="email-01">email-01</option>
+                    <option value="email-02">email-02</option>
+                    <option value="email-03">email-03</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="campaign-type">Tipo de campanha</label>
+                <select id="campaign-type">
+                    <option value="all" selected>Todos</option>
+                    <option value="marketing">Marketing</option>
+                    <option value="transactional">Transacional</option>
+                    <option value="automated">Automatizada</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="date-range">Data de envio da campanha</label>
+                <select id="date-range" onchange="updateDateInputs()">
+                    <option value="custom">Período personalizado</option>
+                    <option value="7" selected>Últimos 7 dias</option>
+                    <option value="15">Últimos 15 dias</option>
+                    <option value="30">Últimos 30 dias</option>
+                    <option value="90">Últimos 90 dias</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Período</label>
+                <div class="date-inputs">
+                    <input type="date" id="start-date" value="2025-05-01">
+                    <input type="date" id="end-date" value="2025-05-07">
+                </div>
+            </div>
+            <div class="filter-group" style="justify-content: flex-end;">
+                <label>&nbsp;</label>
+                <button class="btn" onclick="applyFilters()">Aplicar Filtros</button>
+            </div>
+        </div>
+        
+        <div class="privacy-option" style="margin-bottom: 15px;">
+            <input type="checkbox" id="include-apple-privacy" checked>
+            <label for="include-apple-privacy">Incluir aberturas na proteção de privacidade da Apple</label>
+        </div>
+
+        <div class="scrollable-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nome da campanha</th>
+                        <th>Assunto da campanha</th>
+                        <th>Última data de envio</th>
+                        <th>Número de envios</th>
+                        <th>Número de aberturas</th>
+                        <th>Número de cliques</th>
+                        <th>Número de cancelamento de inscrições</th>
+                        <th>Número de Bounces</th>
+                        <th>Taxa de abertura</th>
+                        <th>Taxa de clique para abertura</th>
+                        <th>Taxa de cliques</th>
+                        <th>Taxa de cancelamentos de inscrição</th>
+                        <th>Taxa de encaminhamentos</th>
+                        <th>Taxa de rejeição</th>
+                    </tr>
+                </thead>
+                <tbody id="campaigns-table">
+                    <tr>
+                        <td colspan="14" class="text-center">Carregando dados...</td>
+                    </tr>
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="3"><strong>Total</strong></td>
+                        <td id="total-sends" class="text-right">-</td>
+                        <td id="total-opens" class="text-right">-</td>
+                        <td id="total-clicks" class="text-right">-</td>
+                        <td id="total-unsubs" class="text-right">-</td>
+                        <td id="total-bounces" class="text-right">-</td>
+                        <td id="avg-open-rate">-</td>
+                        <td id="avg-cto-rate">-</td>
+                        <td id="avg-click-rate">-</td>
+                        <td id="avg-unsub-rate">-</td>
+                        <td id="avg-fwd-rate">-</td>
+                        <td id="avg-bounce-rate">-</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <div class="api-status" id="api-status">
+            Aguardando conexão com a API...
+        </div>
+    </div>
+
+    <script src="js/dashboard.js"></script>
+    <script src="js/export.js"></script>
+</body>
+</html>
