@@ -140,7 +140,7 @@ const processMauticSendEvent = async (account, eventData) => {
           name: 'Campanha padrão Mautic',
           externalId: 'default',
           provider: 'mautic',
-          status: 'active'
+          status: 'sent' // Valor válido do enum
         });
       }
       
@@ -222,7 +222,7 @@ const processMauticSendEvent = async (account, eventData) => {
         name: campaignName,
         externalId: campaignId,
         provider: 'mautic',
-        status: 'active'
+        status: 'sent' // Valor válido do enum
       });
     }
     
@@ -343,7 +343,7 @@ const processMauticOpenEvent = async (account, eventData) => {
         name: campaignName,
         externalId: campaignId,
         provider: 'mautic',
-        status: 'active'
+        status: 'sent' // Valor válido do enum
       });
     }
     
@@ -466,7 +466,7 @@ const processMauticClickEvent = async (account, eventData) => {
         name: campaignName,
         externalId: campaignId,
         provider: 'mautic',
-        status: 'active'
+        status: 'sent' // Valor válido do enum
       });
     }
     
