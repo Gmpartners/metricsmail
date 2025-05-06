@@ -41,6 +41,7 @@ const processMauticWebhook = async (req, res) => {
     let campaign;
     if (mauticCampaignId) {
       campaign = await Campaign.findOne({ 
+        userId: account.userId,
         account: account._id, 
         externalId: mauticCampaignId 
       });
@@ -52,7 +53,8 @@ const processMauticWebhook = async (req, res) => {
           account: account._id,
           name: mauticEvent.campaign.name || `Campanha ${mauticCampaignId}`,
           externalId: mauticCampaignId,
-          provider: 'mautic'
+          provider: 'mautic',
+          status: 'active'
         });
       }
     }
@@ -61,18 +63,24 @@ const processMauticWebhook = async (req, res) => {
     let email;
     if (mauticEmailId && campaign) {
       email = await Email.findOne({
+        userId: account.userId,
         campaign: campaign._id,
         externalId: mauticEmailId
       });
       
       if (!email) {
-        // Criar email se não existir
+        // Criar email com campos obrigatórios
         email = await Email.create({
           userId: account.userId,
+          account: account._id,
           campaign: campaign._id,
           subject: mauticEvent.email.subject || `Email ${mauticEmailId}`,
           externalId: mauticEmailId,
-          provider: 'mautic'
+          provider: 'mautic',
+          htmlContent: mauticEvent.email.content || '<p>Conteúdo não disponível</p>',
+          fromEmail: mauticEvent.email.fromEmail || 'noreply@example.com',
+          fromName: mauticEvent.email.fromName || 'Sistema Mautic',
+          status: 'sent'
         });
       }
     }
@@ -100,7 +108,9 @@ const processMauticWebhook = async (req, res) => {
     
     return responseUtils.success(res, { 
       success: true, 
-      message: 'Evento processado com sucesso' 
+      message: 'Evento processado com sucesso',
+      eventId: event._id,
+      eventType: eventType 
     });
   } catch (err) {
     console.error('Erro ao processar webhook:', err);
