@@ -3,6 +3,7 @@ const router = express.Router();
 const accountsRoutes = require('./accountsRoutes');
 const metricsRoutes = require('./metricsRoutes');
 const emailsRoutes = require('./emailsRoutes');
+const webhooksRoutes = require('./webhooksRoutes'); // Nova importação
 const apiKeyAuth = require('../middleware/apiKeyMiddleware');
 
 // Rota raiz da API
@@ -13,10 +14,15 @@ router.get('/', (req, res) => {
     endpoints: {
       users: '/api/users/{userId}/accounts',
       metrics: '/api/users/{userId}/metrics',
-      emails: '/api/users/{userId}/emails'
+      emails: '/api/users/{userId}/emails',
+      webhooks: '/api/webhooks/{webhookId}' // Adicionar endpoint de webhooks
     }
   });
 });
+
+// Rota de webhooks (sem autenticação de API key)
+// Nota: Os webhooks não usam autenticação por API key para permitir chamadas externas
+router.use('/webhooks', webhooksRoutes);
 
 // Aplicar middleware de autenticação para todas as rotas abaixo
 router.use(apiKeyAuth);

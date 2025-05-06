@@ -1,3 +1,4 @@
+const { v4: uuidv4 } = require('uuid');
 const { Account } = require('../models');
 const responseUtils = require('../utils/responseUtil');
 
@@ -15,7 +16,16 @@ const getAllAccounts = async (req, res) => {
       .select('-credentials.password -credentials.apiKey -credentials.apiSecret -webhookSecret')
       .sort({ createdAt: -1 });
     
-    return responseUtils.success(res, accounts);
+    // Adicionar webhookUrl para contas Mautic
+    const accountsWithWebhookUrl = accounts.map(account => {
+      const acc = account.toObject();
+      if (acc.provider === 'mautic' && acc.webhookId) {
+        acc.webhookUrl = `${process.env.BASE_URL}/api/webhooks/${acc.webhookId}`;
+      }
+      return acc;
+    });
+    
+    return responseUtils.success(res, accountsWithWebhookUrl);
   } catch (err) {
     return responseUtils.serverError(res, err);
   }
@@ -37,7 +47,13 @@ const getAccountById = async (req, res) => {
       return responseUtils.notFound(res, 'Conta não encontrada');
     }
     
-    return responseUtils.success(res, account);
+    // Adicionar webhookUrl para contas Mautic
+    const accountResponse = account.toObject();
+    if (accountResponse.provider === 'mautic' && accountResponse.webhookId) {
+      accountResponse.webhookUrl = `${process.env.BASE_URL}/api/webhooks/${accountResponse.webhookId}`;
+    }
+    
+    return responseUtils.success(res, accountResponse);
   } catch (err) {
     return responseUtils.serverError(res, err);
   }
@@ -59,8 +75,8 @@ const createAccount = async (req, res) => {
       return responseUtils.error(res, 'Todos os campos são obrigatórios');
     }
     
-    // Criar a nova conta associada ao userId
-    const newAccount = new Account({
+    // Inicializar o objeto da conta
+    const accountData = {
       userId,
       name,
       provider,
@@ -71,16 +87,25 @@ const createAccount = async (req, res) => {
       },
       status: 'inactive',
       isConnected: false
-    });
+    };
     
-    // Se for Mautic ou outro provedor, poderíamos validar as credenciais aqui
-    // Por enquanto, apenas simulamos
+    // Se for Mautic, gerar webhookId
+    if (provider === 'mautic') {
+      accountData.webhookId = uuidv4();
+    }
     
+    // Criar a conta
+    const newAccount = new Account(accountData);
     await newAccount.save();
     
-    // Não retorna dados sensíveis
+    // Preparar resposta com webhook URL se for Mautic
     const accountResponse = newAccount.toObject();
     delete accountResponse.credentials.password;
+    
+    // Adicionar webhookUrl para contas Mautic
+    if (provider === 'mautic' && accountResponse.webhookId) {
+      accountResponse.webhookUrl = `${process.env.BASE_URL}/api/webhooks/${accountResponse.webhookId}`;
+    }
     
     return responseUtils.success(
       res, 
@@ -130,6 +155,11 @@ const updateAccount = async (req, res) => {
     delete accountResponse.credentials.apiKey;
     delete accountResponse.credentials.apiSecret;
     delete accountResponse.webhookSecret;
+    
+    // Adicionar webhookUrl para contas Mautic
+    if (accountResponse.provider === 'mautic' && accountResponse.webhookId) {
+      accountResponse.webhookUrl = `${process.env.BASE_URL}/api/webhooks/${accountResponse.webhookId}`;
+    }
     
     return responseUtils.success(
       res, 
