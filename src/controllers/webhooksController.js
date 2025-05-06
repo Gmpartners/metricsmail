@@ -63,6 +63,31 @@ const processMauticWebhook = async (req, res) => {
       }
     }
     
+    // Se não encontramos eventos conhecidos, tentar processar como payload bruto para debug
+    if (processedEvents.length === 0) {
+      console.log('Nenhum evento processado. Tentando analisar o payload bruto');
+      
+      // Verifica se há algum dado no payload que pareça um evento
+      for (const key in req.body) {
+        if (Array.isArray(req.body[key])) {
+          console.log(`Encontrado possível evento do tipo: ${key}`);
+          
+          // Registrar evento de debug
+          const debug = {
+            type: key,
+            data: req.body[key]
+          };
+          
+          processedEvents.push({
+            id: 'debug',
+            type: 'debug',
+            eventType: key,
+            data: 'Evento registrado para debug'
+          });
+        }
+      }
+    }
+    
     // Atualizar a data da última sincronização da conta
     account.lastSync = new Date();
     await account.save();
@@ -94,9 +119,89 @@ const processMauticWebhook = async (req, res) => {
 const processMauticSendEvent = async (account, eventData) => {
   try {
     if (!eventData.email || !eventData.email.id || !eventData.contact) {
-      console.error('Dados incompletos no evento de envio:', eventData);
-      return null;
+      console.log('Dados incompletos no evento de envio. Tentando processar com dados limitados.');
+      // Tentamos extrair dados necessários, mesmo que parciais
+      const emailId = eventData.email?.id?.toString() || 'unknown';
+      const contactEmail = eventData.contact?.email || 'unknown@example.com';
+      
+      console.log(`Processando com dados parciais: Email ID=${emailId}, Contact=${contactEmail}`);
+      
+      // Cria uma campanha padrão
+      let campaign = await Campaign.findOne({ 
+        userId: account.userId,
+        account: account._id,
+        externalId: 'default'
+      });
+      
+      if (!campaign) {
+        campaign = await Campaign.create({
+          userId: account.userId,
+          account: account._id,
+          name: 'Campanha padrão Mautic',
+          externalId: 'default',
+          provider: 'mautic',
+          status: 'active'
+        });
+      }
+      
+      // Cria um email padrão
+      let email = await Email.findOne({
+        userId: account.userId,
+        account: account._id,
+        externalId: emailId
+      });
+      
+      if (!email) {
+        email = await Email.create({
+          userId: account.userId,
+          account: account._id,
+          campaign: campaign._id,
+          subject: eventData.email?.subject || eventData.subject || 'Email Mautic',
+          externalId: emailId,
+          provider: 'mautic',
+          fromName: 'Mautic',
+          fromEmail: 'no-reply@example.com',
+          htmlContent: '<p>Conteúdo não disponível</p>'
+        });
+      }
+      
+      // Criar o evento com dados limitados
+      const timestamp = new Date();
+      const uniqueExternalId = `${account._id}-${emailId}-unknown-send-${timestamp.getTime()}`;
+      
+      // Criar o evento
+      const event = await Event.create({
+        userId: account.userId,
+        account: account._id,
+        campaign: campaign._id,
+        email: email._id,
+        eventType: 'send',
+        timestamp: timestamp,
+        contactEmail: contactEmail,
+        contactId: 'unknown',
+        provider: 'mautic',
+        externalId: uniqueExternalId,
+        metadata: {
+          originalPayload: eventData,
+          isPartialData: true
+        }
+      });
+      
+      // Atualizar métricas do email
+      email.metrics.sentCount += 1;
+      await email.save();
+      
+      return {
+        id: event._id,
+        type: 'send',
+        email: email.subject,
+        contact: contactEmail,
+        isPartialData: true
+      };
     }
+
+    // A partir daqui, temos dados completos
+    console.log(`Processando evento de envio completo: Email ID=${eventData.email.id}, Contact=${eventData.contact.email}`);
 
     // Buscar ou criar a campanha
     // No Mautic, um email pode não estar associado a uma campanha específica
@@ -213,7 +318,7 @@ const processMauticSendEvent = async (account, eventData) => {
 const processMauticOpenEvent = async (account, eventData) => {
   try {
     if (!eventData.stat || !eventData.stat.email || !eventData.stat.lead) {
-      console.error('Dados incompletos no evento de abertura:', eventData);
+      console.log('Dados incompletos no evento de abertura. Tentando processar com dados limitados.');
       return null;
     }
     
@@ -336,7 +441,7 @@ const processMauticOpenEvent = async (account, eventData) => {
 const processMauticClickEvent = async (account, eventData) => {
   try {
     if (!eventData.stat || !eventData.stat.email || !eventData.stat.lead) {
-      console.error('Dados incompletos no evento de clique:', eventData);
+      console.log('Dados incompletos no evento de clique. Tentando processar com dados limitados.');
       return null;
     }
     
