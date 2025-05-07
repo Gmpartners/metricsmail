@@ -147,21 +147,19 @@ accountSchema.methods.testConnection = async function() {
       
       // Se chegou até aqui, a conexão foi bem-sucedida
       if (response.status === 200) {
-        // Após testar com sucesso, vamos criar o webhook
-        const webhookResult = await this.createMauticWebhook(baseUrl, username, password);
-        
-        if (webhookResult.success) {
-          return { 
-            success: true, 
-            message: 'Conexão estabelecida com sucesso e webhook configurado.',
-            webhook: webhookResult.webhook
-          };
-        } else {
-          return { 
-            success: true, 
-            message: 'Conexão estabelecida com sucesso, mas falha ao criar webhook: ' + webhookResult.message
-          };
+        // Gerar webhook ID se ainda não existir
+        if (!this.webhookId) {
+          this.webhookId = uuidv4();
+          this.webhookSecret = uuidv4();
+          this.webhookUrl = `${process.env.BASE_URL}/api/webhooks/${this.webhookId}`;
+          await this.save();
         }
+        
+        return { 
+          success: true, 
+          message: 'Conexão estabelecida com sucesso.',
+          webhookUrl: this.webhookUrl
+        };
       } else {
         return { success: false, message: `Falha na conexão: Código de status ${response.status}` };
       }
@@ -182,82 +180,6 @@ accountSchema.methods.testConnection = async function() {
     } else {
       // Outros erros
       errorMessage = error.message || 'Erro desconhecido na conexão';
-    }
-    
-    return { success: false, message: errorMessage };
-  }
-};
-
-// Método para criar webhook no Mautic
-accountSchema.methods.createMauticWebhook = async function(baseUrl, username, password) {
-  try {
-    // Gerar um ID único para o webhook
-    const webhookId = uuidv4();
-    
-    // Criar URL de callback para o webhook
-    const callbackUrl = `${process.env.BASE_URL || 'http://localhost:3000'}/api/webhooks/${webhookId}`;
-    
-    // Criar token de autenticação Basic
-    const auth = Buffer.from(`${username}:${password}`).toString('base64');
-    
-    // Configurar axios
-    const axiosConfig = {
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/json'
-      },
-      httpsAgent: new https.Agent({
-        rejectUnauthorized: false // Apenas em dev! Remover em produção!
-      })
-    };
-    
-    // Dados do webhook a ser criado
-    const webhookData = {
-      name: `MetricsMail Webhook - ${this.name}`,
-      description: 'Webhook para monitoramento de métricas de email',
-      webhookUrl: callbackUrl,
-      eventsOrderbyDir: 'DESC',
-      triggers: [
-        'mautic.email_on_send',
-        'mautic.email_on_open',
-        'mautic.email_on_click',
-        'mautic.email_on_bounce',
-        'mautic.email_on_unsubscribe'
-      ]
-    };
-    
-    // Enviar requisição para criar webhook
-    const webhookUrl = `${baseUrl}/api/webhooks/new`;
-    const response = await axios.post(webhookUrl, webhookData, axiosConfig);
-    
-    if (response.status === 200 && response.data.hook) {
-      // Salvar as informações do webhook no banco de dados
-      this.webhookId = webhookId;
-      this.webhookUrl = callbackUrl;
-      this.webhookSecret = response.data.hook.secret || uuidv4();
-      await this.save();
-      
-      return { 
-        success: true, 
-        webhook: {
-          id: webhookId,
-          url: callbackUrl,
-          mauticId: response.data.hook.id
-        }
-      };
-    } else {
-      return { success: false, message: 'Resposta inválida ao criar webhook' };
-    }
-  } catch (error) {
-    console.error('Erro ao criar webhook:', error);
-    let errorMessage = 'Falha ao criar webhook';
-    
-    if (error.response) {
-      errorMessage = `Erro ${error.response.status}: ${error.response.statusText || error.response.data?.error || 'Falha na criação de webhook'}`;
-    } else if (error.request) {
-      errorMessage = 'Falha na conexão: servidor não responde';
-    } else {
-      errorMessage = error.message || 'Erro desconhecido ao criar webhook';
     }
     
     return { success: false, message: errorMessage };

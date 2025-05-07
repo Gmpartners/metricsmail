@@ -89,15 +89,7 @@ const metricsSchema = new mongoose.Schema({
       type: Number,
       default: 0
     },
-    uniqueOpenRate: {
-      type: Number,
-      default: 0
-    },
     clickRate: {
-      type: Number,
-      default: 0
-    },
-    uniqueClickRate: {
       type: Number,
       default: 0
     },
@@ -117,17 +109,29 @@ const metricsSchema = new mongoose.Schema({
       type: Number,
       default: 0
     }
+  },
+  
+  // Metadados adicionais
+  metadata: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
   }
 }, {
   timestamps: true
 });
 
-// Índices para consultas comuns
-metricsSchema.index({ userId: 1, account: 1, date: -1 });
-metricsSchema.index({ userId: 1, account: 1, campaign: 1, date: -1 });
-metricsSchema.index({ userId: 1, period: 1, date: -1 });
+// Índices compostos para consultas comuns
+metricsSchema.index({ userId: 1, account: 1, date: -1, period: 1 });
+metricsSchema.index({ userId: 1, campaign: 1, date: -1, period: 1 });
+metricsSchema.index({ userId: 1, account: 1, campaign: 1, date: -1, period: 1 });
 
-// Função auxiliar para determinar os limites do período (início e fim)
+// Índice único para evitar duplicações
+metricsSchema.index(
+  { userId: 1, account: 1, campaign: 1, date: 1, period: 1 },
+  { unique: true, sparse: true }
+);
+
+// Método para definir o início e fim do período com base em uma data e tipo de período
 const getPeriodBoundaries = (date, period) => {
   const periodStart = new Date(date);
   const periodEnd = new Date(date);
@@ -265,17 +269,11 @@ metricsSchema.statics.calculateAndSave = async function(params) {
   // Taxa de entrega (emails entregues / emails enviados)
   const deliveryRate = sentCount > 0 ? (deliveredCount / sentCount) * 100 : 0;
   
-  // Taxa de abertura (todas as aberturas / emails entregues)
-  const openRate = deliveredCount > 0 ? (openCount / deliveredCount) * 100 : 0;
+  // Taxa de abertura (aberturas únicas / emails entregues)
+  const openRate = deliveredCount > 0 ? (uniqueOpenCount / deliveredCount) * 100 : 0;
   
-  // Taxa de abertura única (aberturas únicas / emails entregues)
-  const uniqueOpenRate = deliveredCount > 0 ? (uniqueOpenCount / deliveredCount) * 100 : 0;
-  
-  // Taxa de clique (todos os cliques / emails entregues)
-  const clickRate = deliveredCount > 0 ? (clickCount / deliveredCount) * 100 : 0;
-  
-  // Taxa de clique único (cliques únicos / emails entregues)
-  const uniqueClickRate = deliveredCount > 0 ? (uniqueClickCount / deliveredCount) * 100 : 0;
+  // Taxa de clique (cliques únicos / emails entregues)
+  const clickRate = deliveredCount > 0 ? (uniqueClickCount / deliveredCount) * 100 : 0;
   
   // Taxa de clique por abertura (cliques únicos / aberturas únicas)
   const clickToOpenRate = uniqueOpenCount > 0 ? (uniqueClickCount / uniqueOpenCount) * 100 : 0;
@@ -303,9 +301,7 @@ metricsSchema.statics.calculateAndSave = async function(params) {
     complaintCount,
     deliveryRate,
     openRate,
-    uniqueOpenRate,
     clickRate,
-    uniqueClickRate,
     clickToOpenRate,
     bounceRate,
     unsubscribeRate,

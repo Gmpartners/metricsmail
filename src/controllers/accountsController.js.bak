@@ -36,13 +36,13 @@ const getAllAccounts = async (req, res) => {
 // Obter uma conta específica
 const getAccountById = async (req, res) => {
   try {
-    const { userId, accountId } = req.params;
+    const { userId, id } = req.params;
     
     if (!userId) {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
-    const account = await Account.findOne({ _id: accountId, userId })
+    const account = await Account.findOne({ _id: id, userId })
       .select('-credentials.password -credentials.apiKey -credentials.apiSecret -webhookSecret');
     
     if (!account) {
@@ -117,13 +117,13 @@ const createAccount = async (req, res) => {
 // Atualizar uma conta existente
 const updateAccount = async (req, res) => {
   try {
-    const { userId, accountId } = req.params;
+    const { userId, id } = req.params;
     
     if (!userId) {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
-    const account = await Account.findOne({ _id: accountId, userId });
+    const account = await Account.findOne({ _id: id, userId });
     
     if (!account) {
       return responseUtils.notFound(res, 'Conta não encontrada');
@@ -156,19 +156,19 @@ const updateAccount = async (req, res) => {
 // Excluir uma conta
 const deleteAccount = async (req, res) => {
   try {
-    const { userId, accountId } = req.params;
+    const { userId, id } = req.params;
     
     if (!userId) {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
-    const account = await Account.findOne({ _id: accountId, userId });
+    const account = await Account.findOne({ _id: id, userId });
     
     if (!account) {
       return responseUtils.notFound(res, 'Conta não encontrada');
     }
     
-    await Account.deleteOne({ _id: accountId });
+    await Account.deleteOne({ _id: id });
     
     return responseUtils.success(res, { message: 'Conta excluída com sucesso' });
   } catch (err) {
@@ -179,13 +179,13 @@ const deleteAccount = async (req, res) => {
 // Testar conexão com a conta
 const testConnection = async (req, res) => {
   try {
-    const { userId, accountId } = req.params;
+    const { userId, id } = req.params;
     
     if (!userId) {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
-    const account = await Account.findOne({ _id: accountId, userId });
+    const account = await Account.findOne({ _id: id, userId });
     
     if (!account) {
       return responseUtils.notFound(res, 'Conta não encontrada');
@@ -229,13 +229,13 @@ const testConnection = async (req, res) => {
 // Buscar campanhas do Mautic
 const getMauticCampaigns = async (req, res) => {
   try {
-    const { userId, accountId } = req.params;
+    const { userId, id } = req.params;
     
     if (!userId) {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
-    const account = await Account.findOne({ _id: accountId, userId });
+    const account = await Account.findOne({ _id: id, userId });
     
     if (!account) {
       return responseUtils.notFound(res, 'Conta não encontrada');
@@ -264,13 +264,13 @@ const getMauticCampaigns = async (req, res) => {
 // Buscar emails do Mautic
 const getMauticEmails = async (req, res) => {
   try {
-    const { userId, accountId } = req.params;
+    const { userId, id } = req.params;
     
     if (!userId) {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
-    const account = await Account.findOne({ _id: accountId, userId });
+    const account = await Account.findOne({ _id: id, userId });
     
     if (!account) {
       return responseUtils.notFound(res, 'Conta não encontrada');
