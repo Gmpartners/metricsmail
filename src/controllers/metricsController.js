@@ -322,10 +322,21 @@ const getMetricsByEmail = async (req, res) => {
         const bounceCount = await Event.countDocuments({...eventFilter, eventType: 'bounce'});
         const unsubscribeCount = await Event.countDocuments({...eventFilter, eventType: 'unsubscribe'});
         
-        // Cálculo de taxas
+        // Cálculo de taxas - CORREÇÃO AQUI
         const deliveryRate = sentCount > 0 ? (deliveredCount / sentCount) * 100 : 0;
-        const openRate = deliveredCount > 0 ? (uniqueOpenCount / deliveredCount) * 100 : 0;
-        const clickRate = deliveredCount > 0 ? (uniqueClickCount / deliveredCount) * 100 : 0;
+        
+        // Taxa de abertura total (baseada em todas as aberturas)
+        const openRate = deliveredCount > 0 ? (openCount / deliveredCount) * 100 : 0;
+        
+        // Taxa de abertura única (baseada em aberturas únicas)
+        const uniqueOpenRate = deliveredCount > 0 ? (uniqueOpenCount / deliveredCount) * 100 : 0;
+        
+        // Taxa de clique total (baseada em todos os cliques)
+        const clickRate = deliveredCount > 0 ? (clickCount / deliveredCount) * 100 : 0;
+        
+        // Taxa de clique única (baseada em cliques únicos)
+        const uniqueClickRate = deliveredCount > 0 ? (uniqueClickCount / deliveredCount) * 100 : 0;
+        
         const clickToOpenRate = uniqueOpenCount > 0 ? (uniqueClickCount / uniqueOpenCount) * 100 : 0;
         const bounceRate = sentCount > 0 ? (bounceCount / sentCount) * 100 : 0;
         const unsubscribeRate = deliveredCount > 0 ? (unsubscribeCount / deliveredCount) * 100 : 0;
@@ -359,8 +370,10 @@ const getMetricsByEmail = async (req, res) => {
             bounceCount,
             unsubscribeCount,
             deliveryRate,
-            openRate,
-            clickRate,
+            openRate,           // Taxa baseada em aberturas TOTAIS
+            uniqueOpenRate,     // NOVA taxa baseada em aberturas ÚNICAS
+            clickRate,          // Taxa baseada em cliques TOTAIS
+            uniqueClickRate,    // NOVA taxa baseada em cliques ÚNICOS
             clickToOpenRate,
             bounceRate,
             unsubscribeRate
@@ -431,8 +444,11 @@ const getOpenedEmails = async (req, res) => {
     
     const deliveredCount = await Event.countDocuments(deliveredFilter);
     
-    // Calcular taxa de abertura (com base em aberturas únicas)
-    const openRate = deliveredCount > 0 ? (uniqueOpens / deliveredCount) * 100 : 0;
+    // Calcular taxa de abertura TOTAL (baseada em todas as aberturas)
+    const openRate = deliveredCount > 0 ? (totalOpens / deliveredCount) * 100 : 0;
+    
+    // Calcular taxa de abertura ÚNICA (baseada em aberturas únicas)
+    const uniqueOpenRate = deliveredCount > 0 ? (uniqueOpens / deliveredCount) * 100 : 0;
     
     // Buscar emails recentemente abertos (limitado a 50)
     const recentOpens = await Event.find(baseFilter)
@@ -457,7 +473,8 @@ const getOpenedEmails = async (req, res) => {
         totalOpens,
         uniqueOpens,
         deliveredCount,
-        openRate
+        openRate,           // Taxa baseada em aberturas TOTAIS
+        uniqueOpenRate      // NOVA taxa baseada em aberturas ÚNICAS
       },
       recentOpens: formattedRecentOpens
     });
