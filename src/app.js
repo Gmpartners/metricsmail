@@ -11,8 +11,18 @@ const routes = require('./routes/indexRoutes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Configuração CORS com opções para permitir acesso de qualquer origem
+const corsOptions = {
+  origin: '*',                  // Permite todas as origens
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
+  credentials: true,            // Permite cookies e autenticação
+  allowedHeaders: 'Content-Type,Authorization,x-api-key' // Permite headers comuns mais nosso x-api-key
+};
+
 // Middlewares básicos
-app.use(cors());
+app.use(cors(corsOptions));     // Aplicar configurações CORS personalizadas
 app.use(morgan('dev'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
