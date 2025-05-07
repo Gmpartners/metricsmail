@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { Event } = require('./index');
 
 // Esquema para métricas agregadas (diárias, mensais, etc.)
 const metricsSchema = new mongoose.Schema({
@@ -130,7 +131,44 @@ metricsSchema.index(
   { unique: true, sparse: true }
 );
 
-// Método estático para calcular e salvar métricas
+// Método para definir o início e fim do período com base em uma data e tipo de período
+const getPeriodBoundaries = (date, period) => {
+  const periodStart = new Date(date);
+  const periodEnd = new Date(date);
+  
+  // Configurar o início do período
+  if (period === 'day') {
+    periodStart.setHours(0, 0, 0, 0);
+    periodEnd.setHours(23, 59, 59, 999);
+  } else if (period === 'week') {
+    // Determinar o primeiro dia da semana (domingo)
+    const day = periodStart.getDay();
+    periodStart.setDate(periodStart.getDate() - day); // Voltar para o domingo
+    periodStart.setHours(0, 0, 0, 0);
+    
+    // Determinar o último dia da semana (sábado)
+    periodEnd.setDate(periodEnd.getDate() + (6 - day)); // Avançar para o sábado
+    periodEnd.setHours(23, 59, 59, 999);
+  } else if (period === 'month') {
+    periodStart.setDate(1); // Primeiro dia do mês
+    periodStart.setHours(0, 0, 0, 0);
+    
+    // Último dia do mês
+    periodEnd.setMonth(periodEnd.getMonth() + 1);
+    periodEnd.setDate(0);
+    periodEnd.setHours(23, 59, 59, 999);
+  } else if (period === 'year') {
+    periodStart.setMonth(0, 1); // 1º de janeiro
+    periodStart.setHours(0, 0, 0, 0);
+    
+    periodEnd.setMonth(11, 31); // 31 de dezembro
+    periodEnd.setHours(23, 59, 59, 999);
+  }
+  
+  return { periodStart, periodEnd };
+};
+
+// Método estático para calcular e salvar métricas com base em eventos reais
 metricsSchema.statics.calculateAndSave = async function(params) {
   const { userId, account, campaign, date, period } = params;
   
@@ -138,55 +176,149 @@ metricsSchema.statics.calculateAndSave = async function(params) {
     throw new Error('User ID é obrigatório para calcular métricas');
   }
   
-  // Aqui implementaremos a lógica para calcular as métricas
-  // com base nos eventos. Por enquanto, é apenas um modelo básico.
+  // Determinar período de início e fim para filtrar eventos
+  const { periodStart, periodEnd } = getPeriodBoundaries(date, period);
   
+  // Construir o filtro base para consultas
+  const baseFilter = {
+    userId,
+    account,
+    timestamp: { $gte: periodStart, $lte: periodEnd }
+  };
+  
+  if (campaign) {
+    baseFilter.campaign = campaign;
+  }
+  
+  // ----- Contagem de Eventos -----
+  
+  // Contar todos os eventos (total)
+  const totalEvents = await Event.countDocuments(baseFilter);
+  
+  // Contagem de envios
+  const sentCount = await Event.countDocuments({
+    ...baseFilter,
+    eventType: 'send'
+  });
+  
+  // Contagem de entregas
+  const deliveredCount = await Event.countDocuments({
+    ...baseFilter,
+    eventType: 'delivery'
+  });
+  
+  // ----- Aberturas (Totais e Únicas) -----
+  
+  // Contagem total de aberturas
+  const openCount = await Event.countDocuments({
+    ...baseFilter,
+    eventType: 'open'
+  });
+  
+  // Contagem de aberturas únicas
+  const uniqueOpenCount = await Event.countDocuments({
+    ...baseFilter,
+    eventType: 'open',
+    isFirstInteraction: true
+  });
+  
+  // ----- Cliques (Totais e Únicos) -----
+  
+  // Contagem total de cliques
+  const clickCount = await Event.countDocuments({
+    ...baseFilter,
+    eventType: 'click'
+  });
+  
+  // Contagem de cliques únicos
+  const uniqueClickCount = await Event.countDocuments({
+    ...baseFilter,
+    eventType: 'click',
+    isFirstInteraction: true
+  });
+  
+  // ----- Bounces (Devoluções) -----
+  
+  // Contagem de bounces
+  const bounceCount = await Event.countDocuments({
+    ...baseFilter,
+    eventType: 'bounce'
+  });
+  
+  // ----- Unsubscribes (Cancelamentos) -----
+  
+  // Contagem de unsubscribes
+  const unsubscribeCount = await Event.countDocuments({
+    ...baseFilter,
+    eventType: 'unsubscribe'
+  });
+  
+  // ----- Reclamações -----
+  
+  // Contagem de reclamações
+  const complaintCount = await Event.countDocuments({
+    ...baseFilter,
+    eventType: 'complaint'
+  });
+  
+  // ----- Cálculo de Taxas -----
+  
+  // Calcular taxas com base nos contadores
+  // Evitar divisão por zero para cada taxa
+  
+  // Taxa de entrega (emails entregues / emails enviados)
+  const deliveryRate = sentCount > 0 ? (deliveredCount / sentCount) * 100 : 0;
+  
+  // Taxa de abertura (aberturas únicas / emails entregues)
+  const openRate = deliveredCount > 0 ? (uniqueOpenCount / deliveredCount) * 100 : 0;
+  
+  // Taxa de clique (cliques únicos / emails entregues)
+  const clickRate = deliveredCount > 0 ? (uniqueClickCount / deliveredCount) * 100 : 0;
+  
+  // Taxa de clique por abertura (cliques únicos / aberturas únicas)
+  const clickToOpenRate = uniqueOpenCount > 0 ? (uniqueClickCount / uniqueOpenCount) * 100 : 0;
+  
+  // Taxa de bounce (bounces / emails enviados)
+  const bounceRate = sentCount > 0 ? (bounceCount / sentCount) * 100 : 0;
+  
+  // Taxa de unsubscribe (cancelamentos / emails entregues)
+  const unsubscribeRate = deliveredCount > 0 ? (unsubscribeCount / deliveredCount) * 100 : 0;
+  
+  // Taxa de reclamação (reclamações / emails entregues)
+  const complaintRate = deliveredCount > 0 ? (complaintCount / deliveredCount) * 100 : 0;
+  
+  // Compilar todas as métricas calculadas
+  const metrics = {
+    totalEvents,
+    sentCount,
+    deliveredCount,
+    openCount,
+    uniqueOpenCount,
+    clickCount,
+    uniqueClickCount,
+    bounceCount,
+    unsubscribeCount,
+    complaintCount,
+    deliveryRate,
+    openRate,
+    clickRate,
+    clickToOpenRate,
+    bounceRate,
+    unsubscribeRate,
+    complaintRate
+  };
+  
+  // Preparar filtro para salvar as métricas
   const filter = {
     userId,
     account,
-    period
+    period,
+    date: periodStart // Usamos o início do período para a data de referência
   };
   
   if (campaign) {
     filter.campaign = campaign;
   }
-  
-  // Definir data corretamente com base no período
-  if (period === 'day') {
-    filter.date = new Date(date);
-    filter.date.setHours(0, 0, 0, 0);
-  } else if (period === 'month') {
-    filter.date = new Date(date);
-    filter.date.setDate(1);
-    filter.date.setHours(0, 0, 0, 0);
-  } else if (period === 'year') {
-    filter.date = new Date(date);
-    filter.date.setMonth(0, 1);
-    filter.date.setHours(0, 0, 0, 0);
-  }
-  
-  // Simular alguns dados para fins de teste
-  const metrics = {
-    totalEvents: Math.floor(Math.random() * 1000),
-    sentCount: Math.floor(Math.random() * 1000),
-    deliveredCount: Math.floor(Math.random() * 900),
-    openCount: Math.floor(Math.random() * 500),
-    uniqueOpenCount: Math.floor(Math.random() * 300),
-    clickCount: Math.floor(Math.random() * 200),
-    uniqueClickCount: Math.floor(Math.random() * 150),
-    bounceCount: Math.floor(Math.random() * 50),
-    unsubscribeCount: Math.floor(Math.random() * 20),
-    complaintCount: Math.floor(Math.random() * 10)
-  };
-  
-  // Calcular taxas
-  metrics.deliveryRate = metrics.sentCount > 0 ? (metrics.deliveredCount / metrics.sentCount) * 100 : 0;
-  metrics.openRate = metrics.deliveredCount > 0 ? (metrics.uniqueOpenCount / metrics.deliveredCount) * 100 : 0;
-  metrics.clickRate = metrics.deliveredCount > 0 ? (metrics.uniqueClickCount / metrics.deliveredCount) * 100 : 0;
-  metrics.clickToOpenRate = metrics.uniqueOpenCount > 0 ? (metrics.uniqueClickCount / metrics.uniqueOpenCount) * 100 : 0;
-  metrics.bounceRate = metrics.sentCount > 0 ? (metrics.bounceCount / metrics.sentCount) * 100 : 0;
-  metrics.unsubscribeRate = metrics.deliveredCount > 0 ? (metrics.unsubscribeCount / metrics.deliveredCount) * 100 : 0;
-  metrics.complaintRate = metrics.deliveredCount > 0 ? (metrics.complaintCount / metrics.deliveredCount) * 100 : 0;
   
   // Upsert (atualizar se existir, criar se não existir)
   const result = await this.findOneAndUpdate(

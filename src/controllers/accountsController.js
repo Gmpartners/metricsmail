@@ -98,26 +98,12 @@ const createAccount = async (req, res) => {
     const newAccount = new Account(accountData);
     await newAccount.save();
     
-    // Preparar resposta com webhook URL se for Mautic
+    // Remover dados sensíveis antes de retornar
     const accountResponse = newAccount.toObject();
     delete accountResponse.credentials.password;
     
-    // Adicionar webhookUrl para contas Mautic
-    if (provider === 'mautic' && accountResponse.webhookId) {
-      accountResponse.webhookUrl = `${process.env.BASE_URL}/api/webhooks/${accountResponse.webhookId}`;
-    }
-    
-    return responseUtils.success(
-      res, 
-      accountResponse, 
-      'Conta criada com sucesso', 
-      201
-    );
+    return responseUtils.success(res, accountResponse, 201);
   } catch (err) {
-    if (err.code === 11000) {
-      return responseUtils.error(res, 'Já existe uma conta com estes dados');
-    }
-    
     return responseUtils.serverError(res, err);
   }
 };
@@ -126,46 +112,36 @@ const createAccount = async (req, res) => {
 const updateAccount = async (req, res) => {
   try {
     const { userId, id } = req.params;
-    const { name, url, username, password } = req.body;
     
     if (!userId) {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
-    // Encontrar a conta (garantindo que pertence ao usuário)
     const account = await Account.findOne({ _id: id, userId });
     
     if (!account) {
       return responseUtils.notFound(res, 'Conta não encontrada');
     }
     
-    // Atualizar os campos
+    // Campos permitidos para atualização
+    const { name, url, username, password } = req.body;
+    
+    // Atualizar apenas campos fornecidos
     if (name) account.name = name;
     if (url) account.url = url;
-    
-    // Atualizar credenciais se fornecidas
     if (username) account.credentials.username = username;
     if (password) account.credentials.password = password;
     
     await account.save();
     
-    // Não retorna dados sensíveis
+    // Remover dados sensíveis antes de retornar
     const accountResponse = account.toObject();
     delete accountResponse.credentials.password;
     delete accountResponse.credentials.apiKey;
     delete accountResponse.credentials.apiSecret;
     delete accountResponse.webhookSecret;
     
-    // Adicionar webhookUrl para contas Mautic
-    if (accountResponse.provider === 'mautic' && accountResponse.webhookId) {
-      accountResponse.webhookUrl = `${process.env.BASE_URL}/api/webhooks/${accountResponse.webhookId}`;
-    }
-    
-    return responseUtils.success(
-      res, 
-      accountResponse, 
-      'Conta atualizada com sucesso'
-    );
+    return responseUtils.success(res, accountResponse);
   } catch (err) {
     return responseUtils.serverError(res, err);
   }
@@ -186,13 +162,9 @@ const deleteAccount = async (req, res) => {
       return responseUtils.notFound(res, 'Conta não encontrada');
     }
     
-    await Account.deleteOne({ _id: id, userId });
+    await Account.deleteOne({ _id: id });
     
-    return responseUtils.success(
-      res, 
-      { id }, 
-      'Conta excluída com sucesso'
-    );
+    return responseUtils.success(res, { message: 'Conta excluída com sucesso' });
   } catch (err) {
     return responseUtils.serverError(res, err);
   }
@@ -213,8 +185,7 @@ const testConnection = async (req, res) => {
       return responseUtils.notFound(res, 'Conta não encontrada');
     }
     
-    // Aqui, em uma implementação real, testaríamos a conexão com o provedor
-    // Por enquanto, vamos apenas simular
+    // Testar conexão com o provedor
     const testResult = await account.testConnection();
     
     if (testResult.success) {
@@ -234,9 +205,80 @@ const testConnection = async (req, res) => {
         message: testResult.message,
         accountId: account._id,
         status: account.status,
-        isConnected: account.isConnected
+        isConnected: account.isConnected,
+        webhook: testResult.webhook || null
       }
     );
+  } catch (err) {
+    return responseUtils.serverError(res, err);
+  }
+};
+
+// Buscar campanhas do Mautic
+const getMauticCampaigns = async (req, res) => {
+  try {
+    const { userId, id } = req.params;
+    
+    if (!userId) {
+      return responseUtils.error(res, 'User ID é obrigatório');
+    }
+    
+    const account = await Account.findOne({ _id: id, userId });
+    
+    if (!account) {
+      return responseUtils.notFound(res, 'Conta não encontrada');
+    }
+    
+    if (account.provider !== 'mautic') {
+      return responseUtils.error(res, 'Esta função está disponível apenas para contas Mautic');
+    }
+    
+    // Buscar campanhas do Mautic
+    const campaignsResult = await account.getMauticCampaigns();
+    
+    if (campaignsResult.success) {
+      return responseUtils.success(res, {
+        campaigns: campaignsResult.campaigns,
+        total: campaignsResult.total
+      });
+    } else {
+      return responseUtils.error(res, campaignsResult.message);
+    }
+  } catch (err) {
+    return responseUtils.serverError(res, err);
+  }
+};
+
+// Buscar emails do Mautic
+const getMauticEmails = async (req, res) => {
+  try {
+    const { userId, id } = req.params;
+    
+    if (!userId) {
+      return responseUtils.error(res, 'User ID é obrigatório');
+    }
+    
+    const account = await Account.findOne({ _id: id, userId });
+    
+    if (!account) {
+      return responseUtils.notFound(res, 'Conta não encontrada');
+    }
+    
+    if (account.provider !== 'mautic') {
+      return responseUtils.error(res, 'Esta função está disponível apenas para contas Mautic');
+    }
+    
+    // Buscar emails do Mautic
+    const emailsResult = await account.getMauticEmails();
+    
+    if (emailsResult.success) {
+      return responseUtils.success(res, {
+        emails: emailsResult.emails,
+        total: emailsResult.total
+      });
+    } else {
+      return responseUtils.error(res, emailsResult.message);
+    }
   } catch (err) {
     return responseUtils.serverError(res, err);
   }
@@ -248,5 +290,7 @@ module.exports = {
   createAccount,
   updateAccount,
   deleteAccount,
-  testConnection
+  testConnection,
+  getMauticCampaigns,
+  getMauticEmails
 };

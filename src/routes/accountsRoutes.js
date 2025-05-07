@@ -10,4 +10,8 @@ router.put('/:id', accountsController.updateAccount);
 router.delete('/:id', accountsController.deleteAccount);
 router.post('/:id/test-connection', accountsController.testConnection);
 
+// Novos endpoints para Mautic
+router.get('/:id/campaigns', accountsController.getMauticCampaigns);
+router.get('/:id/emails', accountsController.getMauticEmails);
+
 module.exports = router;

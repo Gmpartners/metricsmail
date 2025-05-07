@@ -399,20 +399,30 @@ const processMauticOpenEvent = async (account, eventData) => {
     const contactId = stat.lead.id ? stat.lead.id.toString() : 'unknown';
     const contactEmail = stat.lead.email || 'unknown@example.com';
     const timestamp = stat.dateRead ? new Date(stat.dateRead) : new Date();
-    const uniqueExternalId = `${account._id}-${emailId}-${contactId}-open-${timestamp.getTime()}`;
     
-    // Verificar se já existe um evento idêntico para evitar duplicação
+    // Criar identificador único para contato-email para rastrear interações únicas
+    const uniqueIdentifier = `${account._id}-${emailId}-${contactId}-open`;
+    const uniqueExternalId = `${uniqueIdentifier}-${timestamp.getTime()}`;
+    
+    // Verificar se já existe QUALQUER evento de abertura para este contato e email
     const existingEvent = await Event.findOne({
       userId: account.userId,
       account: account._id,
       email: email._id,
       eventType: 'open',
-      contactId: contactId,
+      contactId: contactId
+    });
+    
+    // Determinar se esta é a primeira interação deste tipo para este contato+email
+    const isFirstInteraction = !existingEvent;
+    
+    // Verificar se já existe este evento específico para evitar duplicação
+    const exactEvent = await Event.findOne({
       externalId: uniqueExternalId
     });
     
-    if (existingEvent) {
-      console.log('Evento de abertura já registrado:', uniqueExternalId);
+    if (exactEvent) {
+      console.log('Evento de abertura já registrado exatamente:', uniqueExternalId);
       return null;
     }
     
@@ -428,21 +438,35 @@ const processMauticOpenEvent = async (account, eventData) => {
       contactId: contactId,
       provider: 'mautic',
       externalId: uniqueExternalId,
+      isFirstInteraction: isFirstInteraction,
+      uniqueIdentifier: uniqueIdentifier,
       metadata: {
         trackingHash: stat.trackingHash,
         originalPayload: eventData
       }
     });
     
-    // Atualizar métricas do email
-    email.metrics.openCount += 1;
-    await email.save();
+    // Atualizar métricas do email, incrementando corretamente métricas totais e únicas
+    const updateFields = {
+      'metrics.openCount': 1  // Sempre incrementa aberturas totais
+    };
+    
+    // Se for a primeira abertura para este contato, incrementa também aberturas únicas
+    if (isFirstInteraction) {
+      updateFields['metrics.uniqueOpenCount'] = 1;
+    }
+    
+    await Email.findByIdAndUpdate(email._id, { $inc: updateFields });
+    
+    // Atualizar métricas da campanha
+    await Campaign.findByIdAndUpdate(campaign._id, { $inc: updateFields });
     
     return {
       id: event._id,
       type: 'open',
       email: email.subject,
-      contact: contactEmail
+      contact: contactEmail,
+      isFirstInteraction: isFirstInteraction
     };
   } catch (err) {
     console.error('Erro ao processar evento de abertura:', err);
@@ -523,20 +547,32 @@ const processMauticClickEvent = async (account, eventData) => {
     const contactEmail = stat.lead.email || 'unknown@example.com';
     const timestamp = stat.dateClicked ? new Date(stat.dateClicked) : new Date();
     const clickUrl = stat.url || '';
-    const uniqueExternalId = `${account._id}-${emailId}-${contactId}-click-${timestamp.getTime()}`;
     
-    // Verificar se já existe um evento idêntico para evitar duplicação
+    // Criar identificador único para contato-email-url para rastrear cliques únicos
+    // Incluímos a URL para diferenciar cliques em links diferentes
+    const uniqueIdentifier = `${account._id}-${emailId}-${contactId}-click-${encodeURIComponent(clickUrl)}`;
+    const uniqueExternalId = `${uniqueIdentifier}-${timestamp.getTime()}`;
+    
+    // Verificar se já existe QUALQUER clique deste contato neste link específico do email
     const existingEvent = await Event.findOne({
       userId: account.userId,
       account: account._id,
       email: email._id,
       eventType: 'click',
       contactId: contactId,
+      url: clickUrl
+    });
+    
+    // Determinar se esta é a primeira interação deste tipo para este contato+email+link
+    const isFirstInteraction = !existingEvent;
+    
+    // Verificar se já existe este evento específico para evitar duplicação
+    const exactEvent = await Event.findOne({
       externalId: uniqueExternalId
     });
     
-    if (existingEvent) {
-      console.log('Evento de clique já registrado:', uniqueExternalId);
+    if (exactEvent) {
+      console.log('Evento de clique já registrado exatamente:', uniqueExternalId);
       return null;
     }
     
@@ -553,22 +589,36 @@ const processMauticClickEvent = async (account, eventData) => {
       provider: 'mautic',
       externalId: uniqueExternalId,
       url: clickUrl,
+      isFirstInteraction: isFirstInteraction,
+      uniqueIdentifier: uniqueIdentifier,
       metadata: {
         trackingHash: stat.trackingHash,
         originalPayload: eventData
       }
     });
     
-    // Atualizar métricas do email
-    email.metrics.clickCount += 1;
-    await email.save();
+    // Atualizar métricas do email, incrementando corretamente métricas totais e únicas
+    const updateFields = {
+      'metrics.clickCount': 1  // Sempre incrementa cliques totais
+    };
+    
+    // Se for o primeiro clique para este contato neste link, incrementa também cliques únicos
+    if (isFirstInteraction) {
+      updateFields['metrics.uniqueClickCount'] = 1;
+    }
+    
+    await Email.findByIdAndUpdate(email._id, { $inc: updateFields });
+    
+    // Atualizar métricas da campanha
+    await Campaign.findByIdAndUpdate(campaign._id, { $inc: updateFields });
     
     return {
       id: event._id,
       type: 'click',
       email: email.subject,
       contact: contactEmail,
-      url: clickUrl
+      url: clickUrl,
+      isFirstInteraction: isFirstInteraction
     };
   } catch (err) {
     console.error('Erro ao processar evento de clique:', err);
@@ -657,20 +707,30 @@ const processMauticBounceEvent = async (account, eventData) => {
     const timestamp = eventData.timestamp ? new Date(eventData.timestamp) : new Date();
     const bounceType = stat.bounceType || (eventData.reason && eventData.reason.type) || 'hard';
     const bounceMessage = stat.bounceMessage || (eventData.reason && eventData.reason.message) || '';
-    const uniqueExternalId = `${account._id}-${emailId}-${contactId}-bounce-${timestamp.getTime()}`;
     
-    // Verificar se já existe um evento idêntico para evitar duplicação
+    // Criar identificador único para contato-email para rastrear bounces únicos
+    const uniqueIdentifier = `${account._id}-${emailId}-${contactId}-bounce`;
+    const uniqueExternalId = `${uniqueIdentifier}-${timestamp.getTime()}`;
+    
+    // Verificar se já existe QUALQUER bounce para este contato e email
     const existingEvent = await Event.findOne({
       userId: account.userId,
       account: account._id,
       email: email._id,
       eventType: 'bounce',
-      contactId: contactId,
+      contactId: contactId
+    });
+    
+    // Determinar se esta é a primeira interação deste tipo para este contato+email
+    const isFirstInteraction = !existingEvent;
+    
+    // Verificar se já existe este evento específico para evitar duplicação
+    const exactEvent = await Event.findOne({
       externalId: uniqueExternalId
     });
     
-    if (existingEvent) {
-      console.log('Evento de bounce já registrado:', uniqueExternalId);
+    if (exactEvent) {
+      console.log('Evento de bounce já registrado exatamente:', uniqueExternalId);
       return null;
     }
     
@@ -688,6 +748,8 @@ const processMauticBounceEvent = async (account, eventData) => {
       externalId: uniqueExternalId,
       bounceType: bounceType,
       bounceReason: bounceMessage,
+      isFirstInteraction: isFirstInteraction,
+      uniqueIdentifier: uniqueIdentifier,
       metadata: {
         bounceType: bounceType,
         bounceMessage: bounceMessage,
@@ -695,9 +757,11 @@ const processMauticBounceEvent = async (account, eventData) => {
       }
     });
     
-    // Atualizar métricas do email
-    email.metrics.bounceCount += 1;
-    await email.save();
+    // Atualizar métricas do email - para bounces, geralmente só contabilizamos uma vez por contato
+    await Email.findByIdAndUpdate(email._id, { $inc: { 'metrics.bounceCount': 1 } });
+    
+    // Atualizar métricas da campanha
+    await Campaign.findByIdAndUpdate(campaign._id, { $inc: { 'metrics.bounceCount': 1 } });
     
     return {
       id: event._id,
@@ -789,20 +853,30 @@ const processMauticUnsubscribeEvent = async (account, eventData) => {
     const contactEmail = stat.lead.email || 'unknown@example.com';
     const timestamp = stat.dateUnsubscribed ? new Date(stat.dateUnsubscribed) : (eventData.timestamp ? new Date(eventData.timestamp) : new Date());
     const comments = eventData.preferences && eventData.preferences.comments ? eventData.preferences.comments : '';
-    const uniqueExternalId = `${account._id}-${emailId}-${contactId}-unsubscribe-${timestamp.getTime()}`;
     
-    // Verificar se já existe um evento idêntico para evitar duplicação
+    // Criar identificador único para contato-email para rastrear unsubscribe únicos
+    const uniqueIdentifier = `${account._id}-${emailId}-${contactId}-unsubscribe`;
+    const uniqueExternalId = `${uniqueIdentifier}-${timestamp.getTime()}`;
+    
+    // Verificar se já existe QUALQUER unsubscribe para este contato e email
     const existingEvent = await Event.findOne({
       userId: account.userId,
       account: account._id,
       email: email._id,
       eventType: 'unsubscribe',
-      contactId: contactId,
+      contactId: contactId
+    });
+    
+    // Determinar se esta é a primeira interação deste tipo para este contato+email
+    const isFirstInteraction = !existingEvent;
+    
+    // Verificar se já existe este evento específico para evitar duplicação
+    const exactEvent = await Event.findOne({
       externalId: uniqueExternalId
     });
     
-    if (existingEvent) {
-      console.log('Evento de unsubscribe já registrado:', uniqueExternalId);
+    if (exactEvent) {
+      console.log('Evento de unsubscribe já registrado exatamente:', uniqueExternalId);
       return null;
     }
     
@@ -818,15 +892,19 @@ const processMauticUnsubscribeEvent = async (account, eventData) => {
       contactId: contactId,
       provider: 'mautic',
       externalId: uniqueExternalId,
+      isFirstInteraction: isFirstInteraction,
+      uniqueIdentifier: uniqueIdentifier,
       metadata: {
         comments: comments,
         originalPayload: eventData
       }
     });
     
-    // Atualizar métricas do email
-    email.metrics.unsubscribeCount += 1;
-    await email.save();
+    // Atualizar métricas do email - para unsubscribes, geralmente só contabilizamos uma vez por contato
+    await Email.findByIdAndUpdate(email._id, { $inc: { 'metrics.unsubscribeCount': 1 } });
+    
+    // Atualizar métricas da campanha
+    await Campaign.findByIdAndUpdate(campaign._id, { $inc: { 'metrics.unsubscribeCount': 1 } });
     
     return {
       id: event._id,

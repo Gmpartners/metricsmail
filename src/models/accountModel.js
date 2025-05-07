@@ -1,4 +1,8 @@
 const mongoose = require('mongoose');
+const https = require('https');
+const http = require('http');
+const axios = require('axios');
+const { v4: uuidv4 } = require('uuid');
 
 // Esquema para contas de provedores de email marketing
 const accountSchema = new mongoose.Schema({
@@ -64,6 +68,10 @@ const accountSchema = new mongoose.Schema({
     default: null,
     select: false
   },
+  webhookUrl: {
+    type: String,
+    default: null
+  },
   status: {
     type: String,
     enum: ['active', 'inactive', 'error'],
@@ -99,10 +107,285 @@ accountSchema.virtual('campaignsCount', {
   count: true
 });
 
-// Método para testar a conexão
+// Método para testar a conexão com o Mautic
 accountSchema.methods.testConnection = async function() {
-  // Esta função será implementada quando tivermos os provedores
-  return { success: true, message: 'Conexão simulada com sucesso' };
+  try {
+    if (this.provider === 'mautic') {
+      // Obter credenciais completas incluindo senha
+      const accountWithCredentials = await mongoose.model('Account').findById(this._id).select('+credentials.password');
+      const username = accountWithCredentials.credentials.username;
+      const password = accountWithCredentials.credentials.password;
+      
+      // Preparar a URL base da API com o protocolo correto
+      let baseUrl = this.url;
+      if (!baseUrl.startsWith('http')) {
+        baseUrl = 'https://' + baseUrl;
+      }
+      
+      // Remover barra final se existir
+      baseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+      
+      // Criar URL da API de contatos (endpoint simples para testar)
+      const apiUrl = `${baseUrl}/api/contacts?limit=1`;
+      
+      // Criar token de autenticação Basic
+      const auth = Buffer.from(`${username}:${password}`).toString('base64');
+      
+      // Configurar axios para ignorar erros de certificado em desenvolvimento
+      const axiosConfig = {
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        },
+        httpsAgent: new https.Agent({
+          rejectUnauthorized: false // Apenas em dev! Remover em produção!
+        })
+      };
+      
+      // Tentar fazer a requisição
+      const response = await axios.get(apiUrl, axiosConfig);
+      
+      // Se chegou até aqui, a conexão foi bem-sucedida
+      if (response.status === 200) {
+        // Após testar com sucesso, vamos criar o webhook
+        const webhookResult = await this.createMauticWebhook(baseUrl, username, password);
+        
+        if (webhookResult.success) {
+          return { 
+            success: true, 
+            message: 'Conexão estabelecida com sucesso e webhook configurado.',
+            webhook: webhookResult.webhook
+          };
+        } else {
+          return { 
+            success: true, 
+            message: 'Conexão estabelecida com sucesso, mas falha ao criar webhook: ' + webhookResult.message
+          };
+        }
+      } else {
+        return { success: false, message: `Falha na conexão: Código de status ${response.status}` };
+      }
+    } else {
+      // Outros provedores serão implementados posteriormente
+      return { success: true, message: `Conexão simulada para ${this.provider}` };
+    }
+  } catch (error) {
+    console.error('Erro no teste de conexão:', error);
+    let errorMessage = 'Falha ao conectar com o provedor';
+    
+    if (error.response) {
+      // Erro de resposta da API
+      errorMessage = `Erro ${error.response.status}: ${error.response.statusText || 'Falha na autenticação'}`;
+    } else if (error.request) {
+      // Erro de rede (sem resposta)
+      errorMessage = 'Falha na conexão: servidor não responde';
+    } else {
+      // Outros erros
+      errorMessage = error.message || 'Erro desconhecido na conexão';
+    }
+    
+    return { success: false, message: errorMessage };
+  }
+};
+
+// Método para criar webhook no Mautic
+accountSchema.methods.createMauticWebhook = async function(baseUrl, username, password) {
+  try {
+    // Gerar um ID único para o webhook
+    const webhookId = uuidv4();
+    
+    // Criar URL de callback para o webhook
+    const callbackUrl = `${process.env.BASE_URL || 'http://localhost:3000'}/api/webhooks/${webhookId}`;
+    
+    // Criar token de autenticação Basic
+    const auth = Buffer.from(`${username}:${password}`).toString('base64');
+    
+    // Configurar axios
+    const axiosConfig = {
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/json'
+      },
+      httpsAgent: new https.Agent({
+        rejectUnauthorized: false // Apenas em dev! Remover em produção!
+      })
+    };
+    
+    // Dados do webhook a ser criado
+    const webhookData = {
+      name: `MetricsMail Webhook - ${this.name}`,
+      description: 'Webhook para monitoramento de métricas de email',
+      webhookUrl: callbackUrl,
+      eventsOrderbyDir: 'DESC',
+      triggers: [
+        'mautic.email_on_send',
+        'mautic.email_on_open',
+        'mautic.email_on_click',
+        'mautic.email_on_bounce',
+        'mautic.email_on_unsubscribe'
+      ]
+    };
+    
+    // Enviar requisição para criar webhook
+    const webhookUrl = `${baseUrl}/api/webhooks/new`;
+    const response = await axios.post(webhookUrl, webhookData, axiosConfig);
+    
+    if (response.status === 200 && response.data.hook) {
+      // Salvar as informações do webhook no banco de dados
+      this.webhookId = webhookId;
+      this.webhookUrl = callbackUrl;
+      this.webhookSecret = response.data.hook.secret || uuidv4();
+      await this.save();
+      
+      return { 
+        success: true, 
+        webhook: {
+          id: webhookId,
+          url: callbackUrl,
+          mauticId: response.data.hook.id
+        }
+      };
+    } else {
+      return { success: false, message: 'Resposta inválida ao criar webhook' };
+    }
+  } catch (error) {
+    console.error('Erro ao criar webhook:', error);
+    let errorMessage = 'Falha ao criar webhook';
+    
+    if (error.response) {
+      errorMessage = `Erro ${error.response.status}: ${error.response.statusText || error.response.data?.error || 'Falha na criação de webhook'}`;
+    } else if (error.request) {
+      errorMessage = 'Falha na conexão: servidor não responde';
+    } else {
+      errorMessage = error.message || 'Erro desconhecido ao criar webhook';
+    }
+    
+    return { success: false, message: errorMessage };
+  }
+};
+
+// Método para listar campanhas do Mautic
+accountSchema.methods.getMauticCampaigns = async function() {
+  try {
+    // Obter credenciais completas incluindo senha
+    const accountWithCredentials = await mongoose.model('Account').findById(this._id).select('+credentials.password');
+    const username = accountWithCredentials.credentials.username;
+    const password = accountWithCredentials.credentials.password;
+    
+    // Preparar a URL base da API
+    let baseUrl = this.url;
+    if (!baseUrl.startsWith('http')) {
+      baseUrl = 'https://' + baseUrl;
+    }
+    
+    // Remover barra final se existir
+    baseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+    
+    // URL da API de campanhas
+    const apiUrl = `${baseUrl}/api/campaigns`;
+    
+    // Criar token de autenticação Basic
+    const auth = Buffer.from(`${username}:${password}`).toString('base64');
+    
+    // Configurar axios
+    const axiosConfig = {
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/json'
+      },
+      httpsAgent: new https.Agent({
+        rejectUnauthorized: false // Apenas em dev! Remover em produção!
+      })
+    };
+    
+    // Fazer a requisição
+    const response = await axios.get(apiUrl, axiosConfig);
+    
+    if (response.status === 200) {
+      return { 
+        success: true, 
+        campaigns: response.data.campaigns || [],
+        total: response.data.total || 0
+      };
+    } else {
+      return { success: false, message: `Falha ao buscar campanhas: Código ${response.status}` };
+    }
+  } catch (error) {
+    console.error('Erro ao buscar campanhas:', error);
+    let errorMessage = 'Falha ao buscar campanhas';
+    
+    if (error.response) {
+      errorMessage = `Erro ${error.response.status}: ${error.response.statusText || 'Falha na autenticação'}`;
+    } else if (error.request) {
+      errorMessage = 'Falha na conexão: servidor não responde';
+    } else {
+      errorMessage = error.message || 'Erro desconhecido ao buscar campanhas';
+    }
+    
+    return { success: false, message: errorMessage, campaigns: [] };
+  }
+};
+
+// Método para listar emails do Mautic
+accountSchema.methods.getMauticEmails = async function() {
+  try {
+    // Obter credenciais completas incluindo senha
+    const accountWithCredentials = await mongoose.model('Account').findById(this._id).select('+credentials.password');
+    const username = accountWithCredentials.credentials.username;
+    const password = accountWithCredentials.credentials.password;
+    
+    // Preparar a URL base da API
+    let baseUrl = this.url;
+    if (!baseUrl.startsWith('http')) {
+      baseUrl = 'https://' + baseUrl;
+    }
+    
+    // Remover barra final se existir
+    baseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+    
+    // URL da API de emails
+    const apiUrl = `${baseUrl}/api/emails`;
+    
+    // Criar token de autenticação Basic
+    const auth = Buffer.from(`${username}:${password}`).toString('base64');
+    
+    // Configurar axios
+    const axiosConfig = {
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/json'
+      },
+      httpsAgent: new https.Agent({
+        rejectUnauthorized: false // Apenas em dev! Remover em produção!
+      })
+    };
+    
+    // Fazer a requisição
+    const response = await axios.get(apiUrl, axiosConfig);
+    
+    if (response.status === 200) {
+      return { 
+        success: true, 
+        emails: response.data.emails || [],
+        total: response.data.total || 0
+      };
+    } else {
+      return { success: false, message: `Falha ao buscar emails: Código ${response.status}` };
+    }
+  } catch (error) {
+    console.error('Erro ao buscar emails:', error);
+    let errorMessage = 'Falha ao buscar emails';
+    
+    if (error.response) {
+      errorMessage = `Erro ${error.response.status}: ${error.response.statusText || 'Falha na autenticação'}`;
+    } else if (error.request) {
+      errorMessage = 'Falha na conexão: servidor não responde';
+    } else {
+      errorMessage = error.message || 'Erro desconhecido ao buscar emails';
+    }
+    
+    return { success: false, message: errorMessage, emails: [] };
+  }
 };
 
 const Account = mongoose.model('Account', accountSchema);

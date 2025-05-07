@@ -55,6 +55,17 @@ const eventSchema = new mongoose.Schema({
     type: String,
     required: [true, 'O ID externo é obrigatório']
   },
+  // Campo para indicar se é a primeira interação deste tipo para este contato/email
+  isFirstInteraction: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  // Identificador único para esta combinação de contato-email-evento
+  uniqueIdentifier: {
+    type: String,
+    index: true
+  },
   // Campos específicos para diferentes tipos de eventos
   ipAddress: {
     type: String
@@ -91,6 +102,9 @@ eventSchema.index({ userId: 1, campaign: 1, eventType: 1, timestamp: -1 });
 eventSchema.index({ userId: 1, email: 1, eventType: 1, timestamp: -1 });
 eventSchema.index({ userId: 1, contactEmail: 1, eventType: 1, timestamp: -1 });
 eventSchema.index({ userId: 1, externalId: 1 }, { unique: true });
+// Índice para consultas de interações únicas
+eventSchema.index({ campaign: 1, eventType: 1, isFirstInteraction: 1 });
+eventSchema.index({ uniqueIdentifier: 1 }, { unique: true, sparse: true });
 
 const Event = mongoose.model('Event', eventSchema);
 
