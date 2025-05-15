@@ -326,20 +326,20 @@ const getMetricsByEmail = async (req, res) => {
         const deliveryRate = sentCount > 0 ? (deliveredCount / sentCount) * 100 : 0;
         
         // Taxa de abertura total (baseada em todas as aberturas)
-        const openRate = deliveredCount > 0 ? (openCount / deliveredCount) * 100 : 0;
+        const openRate = sentCount > 0 ? (openCount / sentCount) * 100 : 0;
         
         // Taxa de abertura única (baseada em aberturas únicas)
-        const uniqueOpenRate = deliveredCount > 0 ? (uniqueOpenCount / deliveredCount) * 100 : 0;
+        const uniqueOpenRate = sentCount > 0 ? (uniqueOpenCount / sentCount) * 100 : 0;
         
         // Taxa de clique total (baseada em todos os cliques)
-        const clickRate = deliveredCount > 0 ? (clickCount / deliveredCount) * 100 : 0;
+        const clickRate = sentCount > 0 ? (clickCount / sentCount) * 100 : 0;
         
         // Taxa de clique única (baseada em cliques únicos)
-        const uniqueClickRate = deliveredCount > 0 ? (uniqueClickCount / deliveredCount) * 100 : 0;
+        const uniqueClickRate = sentCount > 0 ? (uniqueClickCount / sentCount) * 100 : 0;
         
         const clickToOpenRate = uniqueOpenCount > 0 ? (uniqueClickCount / uniqueOpenCount) * 100 : 0;
         const bounceRate = sentCount > 0 ? (bounceCount / sentCount) * 100 : 0;
-        const unsubscribeRate = deliveredCount > 0 ? (unsubscribeCount / deliveredCount) * 100 : 0;
+        const unsubscribeRate = sentCount > 0 ? (unsubscribeCount / sentCount) * 100 : 0;
         
         // Buscar conta e campanha associadas
         const account = await Account.findById(email.account).select('name provider');
@@ -435,6 +435,15 @@ const getOpenedEmails = async (req, res) => {
     });
     
     // Buscar emails enviados para calcular taxas
+    // Filtro para envios
+    const sendFilter = {
+      ...baseFilter
+    };
+    delete sendFilter.eventType;
+    sendFilter.eventType = "send";
+    
+    const sentCount = await Event.countDocuments(sendFilter);
+
     const deliveredFilter = {
       ...baseFilter,
       eventType: 'delivery'
@@ -445,10 +454,10 @@ const getOpenedEmails = async (req, res) => {
     const deliveredCount = await Event.countDocuments(deliveredFilter);
     
     // Calcular taxa de abertura TOTAL (baseada em todas as aberturas)
-    const openRate = deliveredCount > 0 ? (totalOpens / deliveredCount) * 100 : 0;
+    const openRate = sentCount > 0 ? (totalOpens / sentCount) * 100 : 0;
     
     // Calcular taxa de abertura ÚNICA (baseada em aberturas únicas)
-    const uniqueOpenRate = deliveredCount > 0 ? (uniqueOpens / deliveredCount) * 100 : 0;
+    const uniqueOpenRate = sentCount > 0 ? (uniqueOpens / sentCount) * 100 : 0;
     
     // Buscar emails recentemente abertos (limitado a 50)
     const recentOpens = await Event.find(baseFilter)

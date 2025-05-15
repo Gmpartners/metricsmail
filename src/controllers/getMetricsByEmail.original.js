@@ -1,13 +1,7 @@
-const mongoose = require("mongoose");
-const { Metrics, Account, Campaign, Event, Email } = require('../models');
-const responseUtils = require('../utils/responseUtil');
-const dateHelpers = require('../utils/dateHelpersUtil');
-
-// Obter métricas por data
-const getMetricsByDate = async (req, res) => {
+const getMetricsByEmail = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { startDate, endDate, accountId, campaignId, emailId, emailIds, groupBy = 'day' } = req.query;
+    const { startDate, endDate, accountId, campaignId } = req.query;
     
     if (!userId) {
       return responseUtils.error(res, 'User ID é obrigatório');
@@ -17,17 +11,8 @@ const getMetricsByDate = async (req, res) => {
     const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
     const end = endDate ? new Date(endDate) : new Date();
     
-    // Validar o parâmetro groupBy
-    if (!['day', 'week', 'month', 'year'].includes(groupBy)) {
-      return responseUtils.error(res, 'O parâmetro groupBy deve ser day, week, month ou year');
-    }
-    
-    // Construir o filtro
-    const filter = {
-      date: { $gte: start, $lte: end },
-      period: groupBy,
-      userId // Filtrar pelo userId
-    };
+    // Filtro para emails
+    const emailFilter = { userId };
     
     if (accountId) {
       // Verificar se a conta pertence ao usuário
@@ -37,33 +22,18 @@ const getMetricsByDate = async (req, res) => {
         return responseUtils.error(res, 'Conta não encontrada ou não pertence ao usuário');
       }
       
-      filter.account = accountId;
+      emailFilter.account = accountId;
     }
     
     if (campaignId) {
-      try {
-        // Verificar se a campanha é válida
-        let campaign;
-        
-        // Verificar se o ID da campanha é um ObjectId válido
-        if (mongoose.Types.ObjectId.isValid(campaignId)) {
-          campaign = await Campaign.findOne({ _id: campaignId });
-        } else {
-          // Se não for um ObjectId válido, buscar por externalId que é um campo string
-          campaign = await Campaign.findOne({ externalId: campaignId });
-        }
-        
-        if (!campaign) {
-          return responseUtils.error(res, "Campanha não encontrada");
-        }
-        
-        // Usar o _id da campanha que é um ObjectId válido
-        emailFilter.campaign = campaign._id;
-      } catch (error) {
-        console.error("Erro ao buscar campanha:", error);
-        return responseUtils.error(res, "Erro ao processar ID da campanha: " + error.message);
+      // Verificar se a campanha é válida
+      const campaign = await Campaign.findOne({ _id: campaignId });
+      
+      if (!campaign) {
+        return responseUtils.error(res, 'Campanha não encontrada');
       }
-    }
+      
+      emailFilter.campaign = campaignId;
     }
     
     // Buscar emails do usuário
@@ -153,29 +123,3 @@ const getMetricsByDate = async (req, res) => {
     return responseUtils.serverError(res, err);
   }
 };
-
-// Obter emails abertos
-const getOpenedEmails = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { startDate, endDate, accountId, campaignId, emailId, emailIds, includeUnique = 'true' } = req.query;
-    
-    if (!userId) {
-      return responseUtils.error(res, 'User ID é obrigatório');
-    }
-    
-    // Validar datas
-    const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
-    const end = endDate ? new Date(endDate) : new Date();
-    
-    // Construir filtro base
-    const baseFilter = {
-      userId,
-      eventType: 'open',
-      timestamp: { $gte: start, $lte: end }
-    };
-    
-    if (accountId) {
-      baseFilter.account = accountId;
-    }
-    
