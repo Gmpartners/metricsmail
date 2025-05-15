@@ -8,6 +8,7 @@ router.get('/:accountId', accountsController.getAccountById);
 router.post('/', accountsController.createAccount);
 router.put('/:accountId', accountsController.updateAccount);
 router.delete('/:accountId', accountsController.deleteAccount);
+router.post('/:accountId/test-connection', accountsController.testConnection);
 
 // Endpoints específicos para Mautic
 router.get('/:accountId/campaigns', accountsController.getMauticCampaigns);

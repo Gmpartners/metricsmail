@@ -11,32 +11,18 @@ const routes = require('./routes/indexRoutes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configuração CORS mais permissiva possível
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-api-key');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  // Responde imediatamente para requisições OPTIONS (pre-flight)
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  
-  next();
-});
-
-// Também mantendo o middleware CORS padrão como backup
-app.use(cors({
-  origin: '*',
-  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+// Configuração CORS com opções para permitir acesso de qualquer origem
+const corsOptions = {
+  origin: '*',                  // Permite todas as origens
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
   preflightContinue: false,
   optionsSuccessStatus: 204,
-  credentials: true,
-  allowedHeaders: 'Content-Type,Authorization,X-Requested-With,x-api-key,Origin,Accept'
-}));
+  credentials: true,            // Permite cookies e autenticação
+  allowedHeaders: 'Content-Type,Authorization,x-api-key' // Permite headers comuns mais nosso x-api-key
+};
 
 // Middlewares básicos
+app.use(cors(corsOptions));     // Aplicar configurações CORS personalizadas
 app.use(morgan('dev'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -107,7 +93,6 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
   console.log(`Ambiente: ${process.env.NODE_ENV}`);
-  console.log('CORS configurado para aceitar qualquer origem');
 });
 
 module.exports = app;
