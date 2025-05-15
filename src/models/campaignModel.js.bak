@@ -2,15 +2,6 @@ const mongoose = require('mongoose');
 
 // Esquema para campanhas de email marketing
 const campaignSchema = new mongoose.Schema({
-  // Campo ID numérico para APIs
-  campaignID: {
-    type: Number,
-    default: function() {
-      // Gerar um ID baseado no timestamp (mais simples que um counter)
-      return Math.floor(Date.now() / 1000);
-    },
-    index: true
-  },
   // Campo userId para identificar o proprietário da campanha
   userId: {
     type: String,

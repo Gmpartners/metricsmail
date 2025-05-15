@@ -1,8 +1,3 @@
-const mongoose = require("mongoose");
-const { Metrics, Account, Campaign, Event, Email } = require('../models');
-const responseUtils = require('../utils/responseUtil');
-const dateHelpers = require('../utils/dateHelpersUtil');
-
     if (campaignId) {
       try {
         // Verificar se a campanha é válida
@@ -32,29 +27,3 @@ const dateHelpers = require('../utils/dateHelpersUtil');
         return responseUtils.error(res, "Erro ao processar ID da campanha: " + error.message);
       }
     }
-// Obter emails abertos
-const getOpenedEmails = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { startDate, endDate, accountId, campaignId, emailId, emailIds, includeUnique = 'true' } = req.query;
-    
-    if (!userId) {
-      return responseUtils.error(res, 'User ID é obrigatório');
-    }
-    
-    // Validar datas
-    const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
-    const end = endDate ? new Date(endDate) : new Date();
-    
-    // Construir filtro base
-    const baseFilter = {
-      userId,
-      eventType: 'open',
-      timestamp: { $gte: start, $lte: end }
-    };
-    
-    if (accountId) {
-      baseFilter.account = accountId;
-    }
-    
-
