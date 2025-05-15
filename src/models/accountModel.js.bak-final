@@ -6,15 +6,6 @@ const { v4: uuidv4 } = require('uuid');
 
 // Esquema para contas de provedores de email marketing
 const accountSchema = new mongoose.Schema({
-  // Campo ID numérico para APIs
-  accountID: {
-    type: Number,
-    default: function() {
-      // Gerar um ID baseado no timestamp (mais simples que um counter)
-      return Math.floor(Date.now() / 1000);
-    },
-    index: true
-  },
   // Campo userId para identificar o proprietário da conta
   userId: {
     type: String,
