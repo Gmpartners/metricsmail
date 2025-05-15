@@ -4,6 +4,9 @@ const metricsController = require('../controllers/metricsController');
 const { Event } = require('../models');
 const responseUtils = require('../utils/responseUtil');
 
+// Rota raiz para obter resumo de métricas
+router.get('/', metricsController.getMetricsSummary);
+
 // Rotas de métricas com userId implícito nos parâmetros da rota
 router.get('/by-date', metricsController.getMetricsByDate);
 router.get('/by-account', metricsController.getMetricsByAccount);

@@ -93,6 +93,68 @@ const getDateRange = (period = 'hoje') => {
   return { start, end };
 };
 
+// Retorna o formato de agrupamento de data para o MongoDB agregação
+const getGroupByDateFormat = (dateField, groupBy) => {
+  switch (groupBy) {
+    case 'hour':
+      return {
+        year: { $year: dateField },
+        month: { $month: dateField },
+        day: { $dayOfMonth: dateField },
+        hour: { $hour: dateField }
+      };
+    case 'day':
+      return {
+        year: { $year: dateField },
+        month: { $month: dateField },
+        day: { $dayOfMonth: dateField }
+      };
+    case 'week':
+      return {
+        year: { $year: dateField },
+        week: { $week: dateField }
+      };
+    case 'month':
+      return {
+        year: { $year: dateField },
+        month: { $month: dateField }
+      };
+    default:
+      return {
+        year: { $year: dateField },
+        month: { $month: dateField },
+        day: { $dayOfMonth: dateField }
+      };
+  }
+};
+
+// Formata data para visualização baseado no agrupamento
+const formatDate = (date, groupBy) => {
+  if (!date) return null;
+  
+  // Verificar se estamos recebendo um objeto do MongoDB (groupBy)
+  if (typeof date === 'object' && date !== null) {
+    switch (groupBy) {
+      case 'hour':
+        return `${date.year}-${date.month.toString().padStart(2, '0')}-${date.day.toString().padStart(2, '0')} ${date.hour.toString().padStart(2, '0')}:00`;
+      case 'day':
+        return `${date.year}-${date.month.toString().padStart(2, '0')}-${date.day.toString().padStart(2, '0')}`;
+      case 'week':
+        // Formato ano-semana (YYYY-WW)
+        return `${date.year}-W${date.week.toString().padStart(2, '0')}`;
+      case 'month':
+        // Formato ano-mês (YYYY-MM)
+        return `${date.year}-${date.month.toString().padStart(2, '0')}`;
+      default:
+        return `${date.year}-${date.month.toString().padStart(2, '0')}-${date.day.toString().padStart(2, '0')}`;
+    }
+  }
+  
+  // Se for uma data regular
+  const d = new Date(date);
+  return formatDateISO(d);
+};
+
 module.exports = {
   startOfDay,
   endOfDay,
@@ -101,5 +163,7 @@ module.exports = {
   formatDateISO,
   formatDateDisplay,
   isValidDate,
-  getDateRange
+  getDateRange,
+  getGroupByDateFormat,
+  formatDate
 };
