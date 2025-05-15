@@ -63,11 +63,6 @@ const accountSchema = new mongoose.Schema({
     type: String,
     default: null
   },
-  webhookSecret: {
-    type: String,
-    default: null,
-    select: false
-  },
   webhookUrl: {
     type: String,
     default: null
@@ -106,85 +101,6 @@ accountSchema.virtual('campaignsCount', {
   foreignField: 'account',
   count: true
 });
-
-// Método para testar a conexão com o Mautic
-accountSchema.methods.testConnection = async function() {
-  try {
-    if (this.provider === 'mautic') {
-      // Obter credenciais completas incluindo senha
-      const accountWithCredentials = await mongoose.model('Account').findById(this._id).select('+credentials.password');
-      const username = accountWithCredentials.credentials.username;
-      const password = accountWithCredentials.credentials.password;
-      
-      // Preparar a URL base da API com o protocolo correto
-      let baseUrl = this.url;
-      if (!baseUrl.startsWith('http')) {
-        baseUrl = 'https://' + baseUrl;
-      }
-      
-      // Remover barra final se existir
-      baseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-      
-      // Criar URL da API de contatos (endpoint simples para testar)
-      const apiUrl = `${baseUrl}/api/contacts?limit=1`;
-      
-      // Criar token de autenticação Basic
-      const auth = Buffer.from(`${username}:${password}`).toString('base64');
-      
-      // Configurar axios para ignorar erros de certificado em desenvolvimento
-      const axiosConfig = {
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Content-Type': 'application/json'
-        },
-        httpsAgent: new https.Agent({
-          rejectUnauthorized: false // Apenas em dev! Remover em produção!
-        })
-      };
-      
-      // Tentar fazer a requisição
-      const response = await axios.get(apiUrl, axiosConfig);
-      
-      // Se chegou até aqui, a conexão foi bem-sucedida
-      if (response.status === 200) {
-        // Gerar webhook ID se ainda não existir
-        if (!this.webhookId) {
-          this.webhookId = uuidv4();
-          this.webhookSecret = uuidv4();
-          this.webhookUrl = `${process.env.BASE_URL}/api/webhooks/${this.webhookId}`;
-          await this.save();
-        }
-        
-        return { 
-          success: true, 
-          message: 'Conexão estabelecida com sucesso.',
-          webhookUrl: this.webhookUrl
-        };
-      } else {
-        return { success: false, message: `Falha na conexão: Código de status ${response.status}` };
-      }
-    } else {
-      // Outros provedores serão implementados posteriormente
-      return { success: true, message: `Conexão simulada para ${this.provider}` };
-    }
-  } catch (error) {
-    console.error('Erro no teste de conexão:', error);
-    let errorMessage = 'Falha ao conectar com o provedor';
-    
-    if (error.response) {
-      // Erro de resposta da API
-      errorMessage = `Erro ${error.response.status}: ${error.response.statusText || 'Falha na autenticação'}`;
-    } else if (error.request) {
-      // Erro de rede (sem resposta)
-      errorMessage = 'Falha na conexão: servidor não responde';
-    } else {
-      // Outros erros
-      errorMessage = error.message || 'Erro desconhecido na conexão';
-    }
-    
-    return { success: false, message: errorMessage };
-  }
-};
 
 // Método para listar campanhas do Mautic
 accountSchema.methods.getMauticCampaigns = async function() {
