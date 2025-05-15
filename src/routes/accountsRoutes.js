@@ -5,6 +5,7 @@ const accountsController = require('../controllers/accountsController');
 // Rotas padrão para gerenciamento de contas
 router.get('/', accountsController.getAllAccounts);
 router.get('/:accountId', accountsController.getAccountById);
+router.get('/:accountId/webhook', accountsController.getAccountWebhook);
 router.post('/', accountsController.createAccount);
 router.put('/:accountId', accountsController.updateAccount);
 router.delete('/:accountId', accountsController.deleteAccount);

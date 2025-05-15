@@ -4,10 +4,8 @@ const responseUtils = require('../utils/responseUtil');
 const axios = require('axios');
 const https = require('https');
 
-// Obter todas as contas do usuário
 const getAllAccounts = async (req, res) => {
   try {
-    // Extrair userId dos parâmetros da rota
     const { userId } = req.params;
     
     if (!userId) {
@@ -18,7 +16,6 @@ const getAllAccounts = async (req, res) => {
       .select('-credentials.password -credentials.apiKey -credentials.apiSecret')
       .sort({ createdAt: -1 });
     
-    // Adicionar webhookUrl para contas Mautic
     const accountsWithWebhookUrl = accounts.map(account => {
       const acc = account.toObject();
       if (acc.provider === 'mautic' && acc.webhookId) {
@@ -35,7 +32,6 @@ const getAllAccounts = async (req, res) => {
   }
 };
 
-// Obter uma conta específica
 const getAccountById = async (req, res) => {
   try {
     const { userId, accountId } = req.params;
@@ -51,7 +47,6 @@ const getAccountById = async (req, res) => {
       return responseUtils.notFound(res, 'Conta não encontrada');
     }
     
-    // Adicionar webhookUrl para contas Mautic
     const accountResponse = account.toObject();
     if (accountResponse.provider === 'mautic' && accountResponse.webhookId) {
       if (!accountResponse.webhookUrl) {
@@ -65,39 +60,71 @@ const getAccountById = async (req, res) => {
   }
 };
 
-// Testar conexão com o Mautic
+const getAccountWebhook = async (req, res) => {
+  try {
+    const { userId, accountId } = req.params;
+    
+    if (!userId) {
+      return responseUtils.error(res, 'User ID é obrigatório');
+    }
+    
+    const account = await Account.findOne({ _id: accountId, userId })
+      .select('webhookId webhookUrl provider');
+    
+    if (!account) {
+      return responseUtils.notFound(res, 'Conta não encontrada');
+    }
+    
+    if (!account.webhookId) {
+      account.webhookId = uuidv4();
+      await account.save();
+    }
+    
+    const webhookUrl = account.webhookUrl || `${process.env.BASE_URL}/api/webhooks/${account.webhookId}`;
+    
+    if (!account.webhookUrl) {
+      account.webhookUrl = webhookUrl;
+      await account.save();
+    }
+    
+    return responseUtils.success(res, {
+      webhookId: account.webhookId,
+      webhookUrl: webhookUrl,
+      provider: account.provider,
+      instructions: account.provider === 'mautic' 
+        ? 'Configure este webhook no seu painel Mautic em Configurações > Webhooks. Adicione os eventos: email_on_open, email_on_send, email_on_click, email_on_bounce, email_on_unsubscribe.' 
+        : 'Configure este webhook no seu provedor de email marketing.'
+    });
+  } catch (err) {
+    return responseUtils.serverError(res, err);
+  }
+};
+
 const testMauticConnection = async (url, username, password) => {
   try {
-    // Preparar a URL base da API com o protocolo correto
     let baseUrl = url;
     if (!baseUrl.startsWith('http')) {
       baseUrl = 'https://' + baseUrl;
     }
     
-    // Remover barra final se existir
     baseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
     
-    // Criar URL da API de contatos (endpoint simples para testar)
     const apiUrl = `${baseUrl}/api/contacts?limit=1`;
     
-    // Criar token de autenticação Basic
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
     
-    // Configurar axios para ignorar erros de certificado em desenvolvimento
     const axiosConfig = {
       headers: {
         'Authorization': `Basic ${auth}`,
         'Content-Type': 'application/json'
       },
       httpsAgent: new https.Agent({
-        rejectUnauthorized: false // Apenas em dev! Remover em produção!
+        rejectUnauthorized: false
       })
     };
     
-    // Tentar fazer a requisição
     const response = await axios.get(apiUrl, axiosConfig);
     
-    // Se chegou até aqui, a conexão foi bem-sucedida
     if (response.status === 200) {
       return { success: true, message: 'Conexão estabelecida com sucesso.' };
     } else {
@@ -108,13 +135,10 @@ const testMauticConnection = async (url, username, password) => {
     let errorMessage = 'Falha ao conectar com o provedor';
     
     if (error.response) {
-      // Erro de resposta da API
       errorMessage = `Erro ${error.response.status}: ${error.response.statusText || 'Falha na autenticação'}`;
     } else if (error.request) {
-      // Erro de rede (sem resposta)
       errorMessage = 'Falha na conexão: servidor não responde';
     } else {
-      // Outros erros
       errorMessage = error.message || 'Erro desconhecido na conexão';
     }
     
@@ -122,7 +146,6 @@ const testMauticConnection = async (url, username, password) => {
   }
 };
 
-// Criar uma nova conta com teste de conexão integrado
 const createAccount = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -131,14 +154,12 @@ const createAccount = async (req, res) => {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
-    // Validar os dados da requisição
     const { name, provider, url, username, password } = req.body;
     
     if (!name || !provider || !url || !username || !password) {
       return responseUtils.error(res, 'Todos os campos são obrigatórios');
     }
     
-    // Testar a conexão diretamente durante a criação da conta
     if (provider === 'mautic') {
       const connectionResult = await testMauticConnection(url, username, password);
       
@@ -146,11 +167,9 @@ const createAccount = async (req, res) => {
         return responseUtils.error(res, `Não foi possível conectar. Verifique suas credenciais. ${connectionResult.message}`);
       }
       
-      // Conexão bem-sucedida, prosseguir com a criação da conta
       const webhookId = uuidv4();
       const webhookUrl = `${process.env.BASE_URL}/api/webhooks/${webhookId}`;
       
-      // Inicializar o objeto da conta
       const accountData = {
         userId,
         name,
@@ -166,11 +185,9 @@ const createAccount = async (req, res) => {
         isConnected: true
       };
       
-      // Criar a conta
       const newAccount = new Account(accountData);
       await newAccount.save();
       
-      // Remover dados sensíveis antes de retornar
       const accountResponse = newAccount.toObject();
       delete accountResponse.credentials.password;
       
@@ -180,7 +197,6 @@ const createAccount = async (req, res) => {
         webhookUrl
       }, 201);
     } else {
-      // Para outros provedores (implementação futura)
       return responseUtils.error(res, 'Provedor não suportado atualmente');
     }
   } catch (err) {
@@ -188,7 +204,6 @@ const createAccount = async (req, res) => {
   }
 };
 
-// Atualizar uma conta existente
 const updateAccount = async (req, res) => {
   try {
     const { userId, accountId } = req.params;
@@ -203,10 +218,8 @@ const updateAccount = async (req, res) => {
       return responseUtils.notFound(res, 'Conta não encontrada');
     }
     
-    // Campos permitidos para atualização
     const { name, url, username, password } = req.body;
     
-    // Se estiver atualizando credenciais, deve testar a conexão novamente
     if ((url && url !== account.url) || 
         (username && username !== account.credentials.username) || 
         password) {
@@ -221,7 +234,6 @@ const updateAccount = async (req, res) => {
         return responseUtils.error(res, `Não foi possível conectar com as novas credenciais. ${connectionResult.message}`);
       }
       
-      // Conexão bem-sucedida, prosseguir com a atualização
       if (url) account.url = url;
       if (username) account.credentials.username = username;
       if (password) account.credentials.password = password;
@@ -229,12 +241,10 @@ const updateAccount = async (req, res) => {
       account.isConnected = true;
     }
     
-    // Atualizar outros campos
     if (name) account.name = name;
     
     await account.save();
     
-    // Remover dados sensíveis antes de retornar
     const accountResponse = account.toObject();
     delete accountResponse.credentials.password;
     delete accountResponse.credentials.apiKey;
@@ -249,7 +259,6 @@ const updateAccount = async (req, res) => {
   }
 };
 
-// Excluir uma conta
 const deleteAccount = async (req, res) => {
   try {
     const { userId, accountId } = req.params;
@@ -272,7 +281,6 @@ const deleteAccount = async (req, res) => {
   }
 };
 
-// Buscar campanhas do Mautic
 const getMauticCampaigns = async (req, res) => {
   try {
     const { userId, accountId } = req.params;
@@ -291,7 +299,6 @@ const getMauticCampaigns = async (req, res) => {
       return responseUtils.error(res, 'Esta função está disponível apenas para contas Mautic');
     }
     
-    // Buscar campanhas do Mautic
     const campaignsResult = await account.getMauticCampaigns();
     
     if (campaignsResult.success) {
@@ -307,7 +314,6 @@ const getMauticCampaigns = async (req, res) => {
   }
 };
 
-// Buscar emails do Mautic
 const getMauticEmails = async (req, res) => {
   try {
     const { userId, accountId } = req.params;
@@ -326,7 +332,6 @@ const getMauticEmails = async (req, res) => {
       return responseUtils.error(res, 'Esta função está disponível apenas para contas Mautic');
     }
     
-    // Buscar emails do Mautic
     const emailsResult = await account.getMauticEmails();
     
     if (emailsResult.success) {
@@ -345,6 +350,7 @@ const getMauticEmails = async (req, res) => {
 module.exports = {
   getAllAccounts,
   getAccountById,
+  getAccountWebhook,
   createAccount,
   updateAccount,
   deleteAccount,
