@@ -63,8 +63,8 @@ const eventSchema = new mongoose.Schema({
   },
   // Identificador único para esta combinação de contato-email-evento
   uniqueIdentifier: {
-    type: String,
-    index: true
+    type: String
+    // Removido o index: true daqui para evitar duplicidade
   },
   // Campos específicos para diferentes tipos de eventos
   ipAddress: {

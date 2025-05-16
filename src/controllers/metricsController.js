@@ -23,11 +23,23 @@ const getMetricsSummary = async (req, res) => {
     const bounceCount = await Event.countDocuments({ userId, eventType: 'bounce' });
     const unsubscribeCount = await Event.countDocuments({ userId, eventType: 'unsubscribe' });
     
+    // Contar eventos únicos (usando isFirstInteraction = true)
+    const uniqueOpenCount = await Event.countDocuments({ userId, eventType: 'open', isFirstInteraction: true });
+    const uniqueClickCount = await Event.countDocuments({ userId, eventType: 'click', isFirstInteraction: true });
+    
     // Calcular taxas
     const openRate = sentCount > 0 ? (openCount / sentCount) * 100 : 0;
     const clickRate = sentCount > 0 ? (clickCount / sentCount) * 100 : 0;
     const bounceRate = sentCount > 0 ? (bounceCount / sentCount) * 100 : 0;
     const unsubscribeRate = sentCount > 0 ? (unsubscribeCount / sentCount) * 100 : 0;
+    
+    // Calcular taxas únicas
+    const uniqueOpenRate = sentCount > 0 ? (uniqueOpenCount / sentCount) * 100 : 0;
+    const uniqueClickRate = sentCount > 0 ? (uniqueClickCount / sentCount) * 100 : 0;
+    
+    // Calcular CTR (Click-Through Rate)
+    const ctr = openCount > 0 ? (clickCount / openCount) * 100 : 0;
+    const uniqueCtr = uniqueOpenCount > 0 ? (uniqueClickCount / uniqueOpenCount) * 100 : 0;
     
     return responseUtils.success(res, {
       counts: {
@@ -35,13 +47,19 @@ const getMetricsSummary = async (req, res) => {
         eventCount,
         sentCount,
         openCount,
+        uniqueOpenCount,
         clickCount,
+        uniqueClickCount,
         bounceCount,
         unsubscribeCount
       },
       rates: {
         openRate,
+        uniqueOpenRate,
         clickRate,
+        uniqueClickRate,
+        ctr,
+        uniqueCtr,
         bounceRate,
         unsubscribeRate
       },
@@ -51,6 +69,7 @@ const getMetricsSummary = async (req, res) => {
     return responseUtils.serverError(res, err);
   }
 };
+
 
 // Obter métricas por data
 const getMetricsByDate = async (req, res) => {

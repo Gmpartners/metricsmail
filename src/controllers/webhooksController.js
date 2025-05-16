@@ -1,4 +1,8 @@
-const { Account, Campaign, Email, Event } = require('../models');
+const mongoose = require("mongoose");
+const Account = require("../models/accountModel");
+const Campaign = require("../models/campaignModel");
+const Email = require("../models/emailModel");
+const Event = require("../models/eventModel");
 const responseUtils = require('../utils/responseUtil');
 
 /**
