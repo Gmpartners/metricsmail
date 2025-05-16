@@ -1,3 +1,4 @@
+const { getMetricsSummary } = require("./metricsSummaryController");
 const mongoose = require("mongoose");
 const { Metrics, Account, Campaign, Event, Email } = require('../models');
 const responseUtils = require('../utils/responseUtil');
