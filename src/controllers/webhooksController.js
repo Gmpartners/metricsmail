@@ -108,6 +108,21 @@ const processMauticWebhook = async (req, res) => {
       }
     }
     
+    // Processar evento de cancelamento de inscrição (lead_channel_subscription_changed)
+    if (req.body["mautic.lead_channel_subscription_changed"]) {
+      const subscriptionEvents = Array.isArray(req.body["mautic.lead_channel_subscription_changed"]) 
+        ? req.body["mautic.lead_channel_subscription_changed"] 
+        : [req.body["mautic.lead_channel_subscription_changed"]];
+      
+      for (const event of subscriptionEvents) {
+        // Verificar se é um evento de cancelamento de inscrição (unsubscribe)
+        if (event.new_status === "unsubscribed" && event.channel === "email") {
+          const eventResult = await processMauticSubscriptionChangeEvent(account, event);
+          if (eventResult) processedEvents.push(eventResult);
+        }
+      }
+    }
+
     // Se não encontramos eventos conhecidos, tentar processar como payload bruto para debug
     if (processedEvents.length === 0) {
       console.log('Nenhum evento processado. Tentando analisar o payload bruto');
@@ -1120,4 +1135,334 @@ const processMauticUnsubscribeEvent = async (account, eventData) => {
 
 module.exports = {
   processMauticWebhook
+};
+
+/**
+ * Processa evento de mudança de inscrição (subscription changed/unsubscribe) do Mautic
+ * @param {Object} account - Conta associada ao webhook
+ * @param {Object} eventData - Dados do evento de cancelamento de inscrição
+ * {
+ *   "contact": {...},
+ *   "channel": "email",
+ *   "old_status": "contactable",
+ *   "new_status": "unsubscribed",
+ *   "timestamp": "..."
+ * }
+ */
+const processMauticSubscriptionChangeEvent = async (account, eventData) => {
+  loggerUtils.logEventProcessing("lead_channel_subscription_changed", eventData);
+  
+  try {
+    // Verificar se o evento é realmente um unsubscribe
+    if (eventData.new_status !== 'unsubscribed' || eventData.channel !== 'email') {
+      console.log('Evento de mudança de inscrição não é um unsubscribe. Status:', eventData.new_status);
+      return null;
+    }
+    
+    if (!eventData.contact || !eventData.contact.fields || !eventData.contact.fields.core) {
+      console.log('Dados incompletos no evento de cancelamento de inscrição. Tentando processar com dados limitados.');
+      return null;
+    }
+    
+    // Extrair informações do contato
+    const contact = eventData.contact;
+    const contactId = contact.id.toString();
+    const contactEmail = contact.fields.core.email?.value || 'unknown';
+    
+    // Extrair informações do email (se disponível no doNotContact)
+    let emailId = 'unknown';
+    if (contact.doNotContact && contact.doNotContact.length > 0) {
+      const dncEntry = contact.doNotContact.find(entry => 
+        entry.channel === 'email' && entry.reason === 1);
+      if (dncEntry && dncEntry.channelId) {
+        emailId = dncEntry.channelId.toString();
+      }
+    }
+    
+    // Data do evento
+    const timestamp = eventData.timestamp ? new Date(eventData.timestamp) : new Date();
+    
+    // Buscar campanha padrão para unsubscribe (podemos não ter essa informação)
+    let campaignId = 'default';
+    let campaignName = 'Cancelamentos de inscrição';
+    
+    let campaign = await Campaign.findOne({ 
+      userId: account.userId,
+      account: account._id,
+      externalId: campaignId
+    });
+    
+    if (!campaign) {
+      campaign = await Campaign.create({
+        userId: account.userId,
+        account: account._id,
+        name: campaignName,
+        externalId: campaignId,
+        provider: 'mautic',
+        status: 'active'
+      });
+    }
+    
+    // Buscar email se tiver ID
+    let email = null;
+    if (emailId !== 'unknown') {
+      email = await Email.findOne({
+        userId: account.userId,
+        account: account._id,
+        externalId: emailId
+      });
+      
+      if (!email) {
+        // Criar um email genérico se não encontrarmos
+        email = await Email.create({
+          userId: account.userId,
+          account: account._id,
+          campaign: campaign._id,
+          name: 'Email não identificado',
+          subject: 'Email não identificado',
+          externalId: emailId,
+          provider: 'mautic'
+        });
+      }
+    } else {
+      // Buscar o último email enviado para esse contato
+      const lastSendEvent = await Event.findOne({
+        userId: account.userId,
+        account: account._id,
+        contactEmail: contactEmail,
+        eventType: 'send'
+      }).sort({ timestamp: -1 });
+      
+      if (lastSendEvent) {
+        email = await Email.findById(lastSendEvent.email);
+      }
+      
+      // Se ainda não tivermos um email, crie um genérico
+      if (!email) {
+        email = await Email.create({
+          userId: account.userId,
+          account: account._id,
+          campaign: campaign._id,
+          name: 'Email não identificado',
+          subject: 'Email não identificado',
+          externalId: 'unknown',
+          provider: 'mautic'
+        });
+      }
+    }
+    
+    // Criar ID único para o evento para evitar duplicação
+    const uniqueExternalId = `${contactId}-unsubscribe-${timestamp.getTime()}`;
+    
+    // Verificar se o evento já foi registrado
+    const exactEvent = await Event.findOne({
+      externalId: uniqueExternalId
+    });
+    
+    if (exactEvent) {
+      loggerUtils.logDuplicateEvent("unsubscribe", uniqueExternalId, { 
+        emailId: email ? email.externalId : 'unknown', 
+        contactId, 
+        timestamp 
+      });
+      return null;
+    }
+    
+    // Criar o evento
+    const event = await Event.create({
+      userId: account.userId,
+      account: account._id,
+      campaign: campaign._id,
+      email: email._id,
+      eventType: 'unsubscribe',
+      timestamp: timestamp,
+      contactEmail: contactEmail,
+      contactId: contactId,
+      provider: 'mautic',
+      externalId: uniqueExternalId,
+      metadata: {
+        oldStatus: eventData.old_status,
+        newStatus: eventData.new_status,
+        channel: eventData.channel
+      }
+    });
+    
+    console.log(`Evento de cancelamento de inscrição processado: ${contactEmail}`);
+    
+    return {
+      id: event._id,
+      type: 'unsubscribe',
+      email: email.subject,
+      contact: contactEmail
+    };
+    
+  } catch (err) {
+    console.error('Erro ao processar evento de cancelamento de inscrição:', err);
+    return null;
+  }
+};
+
+/**
+ * Processa evento de mudança de inscrição (subscription changed/unsubscribe) do Mautic
+ * @param {Object} account - Conta associada ao webhook
+ * @param {Object} eventData - Dados do evento de cancelamento de inscrição
+ * {
+ *   "contact": {...},
+ *   "channel": "email",
+ *   "old_status": "contactable",
+ *   "new_status": "unsubscribed",
+ *   "timestamp": "..."
+ * }
+ */
+const processMauticSubscriptionChangeEvent = async (account, eventData) => {
+  loggerUtils.logEventProcessing("lead_channel_subscription_changed", eventData);
+  
+  try {
+    // Verificar se o evento é realmente um unsubscribe
+    if (eventData.new_status !== 'unsubscribed' || eventData.channel !== 'email') {
+      console.log('Evento de mudança de inscrição não é um unsubscribe. Status:', eventData.new_status);
+      return null;
+    }
+    
+    if (!eventData.contact || !eventData.contact.fields || !eventData.contact.fields.core) {
+      console.log('Dados incompletos no evento de cancelamento de inscrição. Tentando processar com dados limitados.');
+      return null;
+    }
+    
+    // Extrair informações do contato
+    const contact = eventData.contact;
+    const contactId = contact.id.toString();
+    const contactEmail = contact.fields.core.email?.value || 'unknown';
+    
+    // Extrair informações do email (se disponível no doNotContact)
+    let emailId = 'unknown';
+    if (contact.doNotContact && contact.doNotContact.length > 0) {
+      const dncEntry = contact.doNotContact.find(entry => 
+        entry.channel === 'email' && entry.reason === 1);
+      if (dncEntry && dncEntry.channelId) {
+        emailId = dncEntry.channelId.toString();
+      }
+    }
+    
+    // Data do evento
+    const timestamp = eventData.timestamp ? new Date(eventData.timestamp) : new Date();
+    
+    // Buscar campanha padrão para unsubscribe (podemos não ter essa informação)
+    let campaignId = 'default';
+    let campaignName = 'Cancelamentos de inscrição';
+    
+    let campaign = await Campaign.findOne({ 
+      userId: account.userId,
+      account: account._id,
+      externalId: campaignId
+    });
+    
+    if (!campaign) {
+      campaign = await Campaign.create({
+        userId: account.userId,
+        account: account._id,
+        name: campaignName,
+        externalId: campaignId,
+        provider: 'mautic',
+        status: 'active'
+      });
+    }
+    
+    // Buscar email se tiver ID
+    let email = null;
+    if (emailId !== 'unknown') {
+      email = await Email.findOne({
+        userId: account.userId,
+        account: account._id,
+        externalId: emailId
+      });
+      
+      if (!email) {
+        // Criar um email genérico se não encontrarmos
+        email = await Email.create({
+          userId: account.userId,
+          account: account._id,
+          campaign: campaign._id,
+          name: 'Email não identificado',
+          subject: 'Email não identificado',
+          externalId: emailId,
+          provider: 'mautic'
+        });
+      }
+    } else {
+      // Buscar o último email enviado para esse contato
+      const lastSendEvent = await Event.findOne({
+        userId: account.userId,
+        account: account._id,
+        contactEmail: contactEmail,
+        eventType: 'send'
+      }).sort({ timestamp: -1 });
+      
+      if (lastSendEvent) {
+        email = await Email.findById(lastSendEvent.email);
+      }
+      
+      // Se ainda não tivermos um email, crie um genérico
+      if (!email) {
+        email = await Email.create({
+          userId: account.userId,
+          account: account._id,
+          campaign: campaign._id,
+          name: 'Email não identificado',
+          subject: 'Email não identificado',
+          externalId: 'unknown',
+          provider: 'mautic'
+        });
+      }
+    }
+    
+    // Criar ID único para o evento para evitar duplicação
+    const uniqueExternalId = `${contactId}-unsubscribe-${timestamp.getTime()}`;
+    
+    // Verificar se o evento já foi registrado
+    const exactEvent = await Event.findOne({
+      externalId: uniqueExternalId
+    });
+    
+    if (exactEvent) {
+      loggerUtils.logDuplicateEvent("unsubscribe", uniqueExternalId, { 
+        emailId: email ? email.externalId : 'unknown', 
+        contactId, 
+        timestamp 
+      });
+      return null;
+    }
+    
+    // Criar o evento
+    const event = await Event.create({
+      userId: account.userId,
+      account: account._id,
+      campaign: campaign._id,
+      email: email._id,
+      eventType: 'unsubscribe',
+      timestamp: timestamp,
+      contactEmail: contactEmail,
+      contactId: contactId,
+      provider: 'mautic',
+      externalId: uniqueExternalId,
+      metadata: {
+        oldStatus: eventData.old_status,
+        newStatus: eventData.new_status,
+        channel: eventData.channel
+      }
+    });
+    
+    console.log(`Evento de cancelamento de inscrição processado: ${contactEmail}`);
+    
+    return {
+      id: event._id,
+      type: 'unsubscribe',
+      email: email.subject,
+      contact: contactEmail
+    };
+    
+  } catch (err) {
+    console.error('Erro ao processar evento de cancelamento de inscrição:', err);
+    return null;
+  }
 };
