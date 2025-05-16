@@ -357,11 +357,20 @@ const getMetricsByCampaign = async (req, res) => {
   }
 };
 
-// Obter métricas por email
+    
+// Método atualizado para suportar múltiplos IDs
 const getMetricsByEmail = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { startDate, endDate, accountId, campaignId, limit = 100, page = 1 } = req.query;
+    const { 
+      startDate, 
+      endDate, 
+      accountIds, 
+      campaignIds, 
+      emailIds,
+      limit = 100, 
+      page = 1 
+    } = req.query;
     
     if (!userId) {
       return responseUtils.error(res, 'User ID é obrigatório');
@@ -371,34 +380,120 @@ const getMetricsByEmail = async (req, res) => {
     const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
     const end = endDate ? new Date(endDate) : new Date();
     
-    // Construir filtro para eventos
-    const eventFilter = {
-      userId,
-      timestamp: { $gte: start, $lte: end }
-    };
+    // Construir filtro para emails
+    const emailFilter = { userId };
     
-    if (accountId) eventFilter.accountId = accountId;
-    if (campaignId) eventFilter.campaignId = campaignId;
+    // Processar filtros de múltiplos IDs
+    const { accountIdArray, campaignIdArray, emailIdArray } = filterUtil.processMultipleIdsParams(req.query);
     
-    // Primeiro, obter todos os emailIds distintos no período
-    const emailIdsResult = await Event.distinct('emailId', eventFilter);
+    if (accountIdArray) {
+      emailFilter.account = { $in: accountIdArray };
+    }
     
-    // Converter para ObjectId se necessário
-    const emailIds = emailIdsResult.map(id => {
-      try {
-        return mongoose.Types.ObjectId(id);
-      } catch (e) {
-        return id;
-      }
-    });
+    if (campaignIdArray) {
+      emailFilter.campaign = { $in: campaignIdArray };
+    }
+    
+    if (emailIdArray) {
+      emailFilter._id = { $in: emailIdArray };
+    }
     
     // Definir paginação
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const pageSize = parseInt(limit);
     
-    // Buscar detalhes dos emails com paginação
-    let emails = [];
+    // Buscar emails com paginação e informações relacionadas
+    const emails = await Email.find(emailFilter)
+      .populate('account', 'name provider')
+      .populate('campaign', 'name')
+      .sort({ sentDate: -1 })
+      .skip(skip)
+      .limit(pageSize);
     
+    // Contar total para paginação
+    const totalEmails = await Email.countDocuments(emailFilter);
+    
+    // Para cada email, buscar suas métricas com base em eventos
+    const emailsWithMetrics = await Promise.all(
+      emails.map(async (email) => {
+        // Filtro para eventos deste email
+        const eventFilter = {
+          userId,
+          emailId: email._id.toString(),
+          timestamp: { $gte: start, $lte: end }
+        };
+        
+        // Contar eventos por tipo
+        const sentCount = await Event.countDocuments({ ...eventFilter, eventType: 'send' });
+        const deliveredCount = await Event.countDocuments({ ...eventFilter, eventType: 'delivery' });
+        const openCount = await Event.countDocuments({ ...eventFilter, eventType: 'open' });
+        const clickCount = await Event.countDocuments({ ...eventFilter, eventType: 'click' });
+        const bounceCount = await Event.countDocuments({ ...eventFilter, eventType: 'bounce' });
+        const unsubscribeCount = await Event.countDocuments({ ...eventFilter, eventType: 'unsubscribe' });
+        
+        // Contar contatos únicos para aberturas e cliques
+        const uniqueOpeners = await Event.distinct('contactEmail', { ...eventFilter, eventType: 'open' });
+        const uniqueClickers = await Event.distinct('contactEmail', { ...eventFilter, eventType: 'click' });
+        
+        // Métricas calculadas
+        const metrics = {
+          sentCount,
+          deliveredCount,
+          openCount,
+          uniqueOpenCount: uniqueOpeners.length,
+          clickCount,
+          uniqueClickCount: uniqueClickers.length,
+          bounceCount,
+          unsubscribeCount
+        };
+        
+        // Calcular taxas
+        const openRate = deliveredCount > 0 ? (uniqueOpeners.length / deliveredCount) * 100 : 0;
+        const clickRate = deliveredCount > 0 ? (uniqueClickers.length / deliveredCount) * 100 : 0;
+        const bounceRate = sentCount > 0 ? (bounceCount / sentCount) * 100 : 0;
+        const unsubscribeRate = deliveredCount > 0 ? (unsubscribeCount / deliveredCount) * 100 : 0;
+        const clickToOpenRate = uniqueOpeners.length > 0 ? (uniqueClickers.length / uniqueOpeners.length) * 100 : 0;
+        
+        // Retornar dados formatados para o email
+        return {
+          id: email._id,
+          subject: email.subject,
+          sentDate: email.sentDate,
+          campaign: email.campaign ? {
+            id: email.campaign._id,
+            name: email.campaign.name
+          } : null,
+          account: email.account ? {
+            id: email.account._id,
+            name: email.account.name,
+            provider: email.account.provider
+          } : null,
+          metrics: {
+            ...metrics,
+            openRate,
+            clickRate,
+            bounceRate,
+            unsubscribeRate,
+            clickToOpenRate
+          }
+        };
+      })
+    );
+    
+    // Retornar com informações de paginação
+    return responseUtils.success(res, {
+      emails: emailsWithMetrics,
+      pagination: {
+        page: parseInt(page),
+        pageSize: parseInt(limit),
+        totalItems: totalEmails,
+        totalPages: Math.ceil(totalEmails / pageSize)
+      }
+    });
+  } catch (err) {
+    return responseUtils.serverError(res, err);
+  }
+};
     // Verificar se há emails para buscar
     if (emailIds.length > 0) {
       // Buscar emails com paginação
@@ -1268,6 +1363,7 @@ const getEvents = async (req, res) => {
 };
 
 module.exports = {
+  compareMetrics,
   getMetricsSummary,
   getMetricsByDate,
   getMetricsByAccount,
@@ -1281,4 +1377,57 @@ module.exports = {
   getDailyOpens,
   getDailyClicks,
   getEvents
+};
+
+// Importar módulo de comparação de métricas e utilitário de filtro
+const compareMetricsController = require('./compareMetricsController');
+const filterUtil = require('../utils/filterUtil');
+
+// Método para comparar métricas entre múltiplos itens
+const compareMetrics = compareMetricsController.compareMetrics;
+
+// Método atualizado para obter eventos com suporte a múltiplos IDs
+const getEvents = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { limit = 50, eventType } = req.query;
+    
+    if (!userId) {
+      return responseUtils.error(res, 'User ID é obrigatório');
+    }
+    
+    // Construir filtro usando o utilitário
+    const filter = filterUtil.buildFilter(userId, req.query);
+    
+    // Adicionar filtro de tipo de evento se fornecido
+    if (eventType) {
+      filter.eventType = eventType;
+    }
+    
+    // Buscar eventos
+    const events = await Event.find(filter)
+      .populate('account', 'name provider')
+      .populate('campaign', 'name')
+      .populate('email', 'subject')
+      .sort({ timestamp: -1 })
+      .limit(parseInt(limit, 10));
+    
+    // Formatar os dados para o frontend
+    const formattedEvents = events.map(event => ({
+      _id: event._id,
+      eventType: event.eventType,
+      timestamp: event.timestamp,
+      campaignName: event.campaign ? event.campaign.name : 'Desconhecido',
+      contactEmail: event.contactEmail,
+      emailSubject: event.email ? event.email.subject : 'Desconhecido',
+      emailId: event.email ? event.email._id : null,
+      accountName: event.account ? event.account.name : 'Desconhecido',
+      accountId: event.account ? event.account._id : null,
+      campaignId: event.campaign ? event.campaign._id : null
+    }));
+    
+    return responseUtils.success(res, formattedEvents);
+  } catch (err) {
+    return responseUtils.serverError(res, err);
+  }
 };
