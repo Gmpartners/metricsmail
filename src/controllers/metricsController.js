@@ -371,7 +371,7 @@ const getMetricsByEmail = async (req, res) => {
         // Filtro para eventos deste email
         const eventFilter = {
           userId,
-          emailId: email._id.toString(), // Usa emailId em vez de email
+          email: email._id, // Usa o campo email que é um ObjectId
           timestamp: { $gte: start, $lte: end }
         };
         };
@@ -980,7 +980,7 @@ const compareMetrics = async (req, res) => {
           emails.map(async (email) => {
             const eventFilter = {
               userId,
-              emailId: email._id.toString(),
+              email: email._id, // Usa o campo email que é um ObjectId
               timestamp: { $gte: start, $lte: end }
             };
             
