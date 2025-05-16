@@ -374,6 +374,7 @@ const getMetricsByEmail = async (req, res) => {
           email: email._id, // Usa o campo email que é um ObjectId
           timestamp: { $gte: start, $lte: end }
         };
+        console.log("Filtro de evento:", eventFilter);
         };
         
         // Contar eventos por tipo
@@ -381,6 +382,7 @@ const getMetricsByEmail = async (req, res) => {
         const deliveredCount = await Event.countDocuments({ ...eventFilter, eventType: 'delivery' });
         const openCount = await Event.countDocuments({ ...eventFilter, eventType: 'open' });
         const clickCount = await Event.countDocuments({ ...eventFilter, eventType: 'click' });
+        console.log(`Contagem de envios: ${sentCount}, Contagem de aberturas: ${openCount}, Contagem de cliques: ${clickCount}`);
         const bounceCount = await Event.countDocuments({ ...eventFilter, eventType: 'bounce' });
         const unsubscribeCount = await Event.countDocuments({ ...eventFilter, eventType: 'unsubscribe' });
         
