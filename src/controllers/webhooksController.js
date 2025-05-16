@@ -266,7 +266,7 @@ const processMauticPageHitEvent = async (account, eventData) => {
     });
     
     if (exactEvent) {
-      console.log('Evento de page hit já registrado exatamente:', uniqueExternalId);
+      loggerUtils.logDuplicateEvent("page_hit", uniqueExternalId, { emailId, contactId, timestamp });
       return null;
     }
     
@@ -620,7 +620,7 @@ const processMauticOpenEvent = async (account, eventData) => {
     });
     
     if (exactEvent) {
-      console.log('Evento de abertura já registrado exatamente:', uniqueExternalId);
+      loggerUtils.logDuplicateEvent("open", uniqueExternalId, { emailId, contactId, timestamp });
       return null;
     }
     
@@ -771,7 +771,7 @@ const processMauticClickEvent = async (account, eventData) => {
     });
     
     if (exactEvent) {
-      console.log('Evento de clique já registrado exatamente:', uniqueExternalId);
+      loggerUtils.logDuplicateEvent("click", uniqueExternalId, { emailId, contactId, timestamp });
       return null;
     }
     
@@ -929,7 +929,7 @@ const processMauticBounceEvent = async (account, eventData) => {
     });
     
     if (exactEvent) {
-      console.log('Evento de bounce já registrado exatamente:', uniqueExternalId);
+      loggerUtils.logDuplicateEvent("bounce", uniqueExternalId, { emailId, contactId, timestamp });
       return null;
     }
     
@@ -1075,7 +1075,7 @@ const processMauticUnsubscribeEvent = async (account, eventData) => {
     });
     
     if (exactEvent) {
-      console.log('Evento de unsubscribe já registrado exatamente:', uniqueExternalId);
+      loggerUtils.logDuplicateEvent("unsubscribe", uniqueExternalId, { emailId, contactId, timestamp });
       return null;
     }
     

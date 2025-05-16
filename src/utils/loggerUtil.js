@@ -45,7 +45,7 @@ const sanitizePayload = (payload, maxLength = 100, hideHtml = true) => {
 };
 
 /**
- * Loga um payload Mautic de forma limpa, removendo conteúdo HTML
+ * Loga um payload Mautic de forma concisa
  * @param {Object} payload - O payload a ser logado
  */
 const logMauticWebhook = (payload) => {
@@ -57,12 +57,8 @@ const logMauticWebhook = (payload) => {
   // Cria uma versão sanitizada do payload para logging
   const sanitizedPayload = sanitizePayload(payload);
   
+  // Log mais conciso - apenas a estrutura geral do payload
   console.log('Payload sanitizado:', JSON.stringify(sanitizedPayload, null, 2));
-};
-
-module.exports = {
-  sanitizePayload,
-  logMauticWebhook
 };
 
 /**
@@ -85,7 +81,7 @@ const logEventProcessing = (eventType, eventData, metadata = {}) => {
         eventInfo.sourceId = eventData.hit.sourceId || 'N/A';
         eventInfo.emailId = eventData.hit.email?.id || 'N/A';
         eventInfo.leadId = eventData.hit.lead?.id || 'N/A';
-        eventInfo.leadEmail = eventData.hit.lead?.email || 'unknown';
+        eventInfo.leadEmail = eventData.hit.lead?.fields?.core?.email?.value || 'unknown';
         eventInfo.url = eventData.hit.url || eventData.hit.query?.page_url || 'N/A';
         eventInfo.dateHit = eventData.hit.dateHit || 'N/A';
       }
@@ -128,8 +124,26 @@ const logEventProcessing = (eventType, eventData, metadata = {}) => {
   console.log(`[EVENT ${eventType}]`, JSON.stringify(eventInfo));
 };
 
+/**
+ * Registra uma duplicação de evento com mais detalhes para análise
+ * @param {string} eventType - Tipo de evento
+ * @param {string} uniqueId - ID único do evento
+ * @param {Object} eventDetails - Detalhes adicionais do evento
+ */
+const logDuplicateEvent = (eventType, uniqueId, eventDetails = {}) => {
+  const details = {
+    eventType,
+    uniqueId,
+    timestamp: new Date().toISOString(),
+    ...eventDetails
+  };
+  
+  console.log(`[DUPLICADO-${eventType.toUpperCase()}] ${uniqueId} - ${JSON.stringify(details)}`);
+};
+
 module.exports = {
   sanitizePayload,
   logMauticWebhook,
-  logEventProcessing
+  logEventProcessing,
+  logDuplicateEvent
 };
