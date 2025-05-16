@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 const Account = require("../models/accountModel");
-const loggerUtils = require("../utils/loggerUtil");
 const Campaign = require("../models/campaignModel");
 const Email = require("../models/emailModel");
 const Event = require("../models/eventModel");
@@ -30,7 +29,7 @@ const processMauticWebhook = async (req, res) => {
     }
     
     // Registrar o payload recebido para fins de depuração
-    loggerUtils.logMauticWebhook(req.body);
+    console.log('Mautic webhook payload:', JSON.stringify(req.body));
     
     // Armazenar eventos processados
     const processedEvents = [];
@@ -173,7 +172,6 @@ const processMauticWebhook = async (req, res) => {
  * }
  */
 const processMauticPageHitEvent = async (account, eventData) => {
-  loggerUtils.logEventProcessing("page_on_hit", eventData);
   try {
     // Verificar se temos os dados necessários
     if (!eventData.hit || !eventData.hit.email || !eventData.hit.lead) {
@@ -338,7 +336,6 @@ const processMauticPageHitEvent = async (account, eventData) => {
  * }
  */
 const processMauticSendEvent = async (account, eventData) => {
-  loggerUtils.logEventProcessing("email_on_send", eventData);
   try {
     if (!eventData.email || !eventData.email.id || !eventData.contact) {
       console.log('Dados incompletos no evento de envio. Tentando processar com dados limitados.');
@@ -538,7 +535,6 @@ const processMauticSendEvent = async (account, eventData) => {
  * }
  */
 const processMauticOpenEvent = async (account, eventData) => {
-  loggerUtils.logEventProcessing("email_on_open", eventData);
   try {
     if (!eventData.stat || !eventData.stat.email || !eventData.stat.lead) {
       console.log('Dados incompletos no evento de abertura. Tentando processar com dados limitados.');
@@ -686,7 +682,6 @@ const processMauticOpenEvent = async (account, eventData) => {
  * }
  */
 const processMauticClickEvent = async (account, eventData) => {
-  loggerUtils.logEventProcessing("email_on_click", eventData);
   try {
     if (!eventData.stat || !eventData.stat.email || !eventData.stat.lead) {
       console.log('Dados incompletos no evento de clique. Tentando processar com dados limitados.');
