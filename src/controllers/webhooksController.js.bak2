@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 const Account = require("../models/accountModel");
-const cleanLogsUtil = require("../utils/cleanLogsUtil");
 const loggerUtils = require("../utils/loggerUtil");
 const Campaign = require("../models/campaignModel");
 const Email = require("../models/emailModel");
