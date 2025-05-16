@@ -1,49 +1,18 @@
 const express = require('express');
-const router = express.Router({ mergeParams: true }); // importante para acessar userId
-const { Email } = require('../models');
+const router = express.Router({ mergeParams: true });
+const emailController = require('../controllers/emailController');
 const responseUtils = require('../utils/responseUtil');
 
-// Obter todos os emails do usuário
-router.get('/', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    
-    if (!userId) {
-      return responseUtils.error(res, 'User ID é obrigatório');
-    }
-    
-    const emails = await Email.find({ userId })
-      .populate('account', 'name provider')
-      .populate('campaign', 'name')
-      .sort({ createdAt: -1 });
-    
-    return responseUtils.success(res, emails);
-  } catch (err) {
-    return responseUtils.serverError(res, err);
-  }
-});
+// Rota para listar todos os emails com suporte a múltiplas contas
+router.get('/', emailController.listEmails);
 
-// Obter um email específico
-router.get('/:id', async (req, res) => {
-  try {
-    const { userId, id } = req.params;
-    
-    if (!userId) {
-      return responseUtils.error(res, 'User ID é obrigatório');
-    }
-    
-    const email = await Email.findOne({ _id: id, userId })
-      .populate('account', 'name provider')
-      .populate('campaign', 'name');
-    
-    if (!email) {
-      return responseUtils.notFound(res, 'Email não encontrado');
-    }
-    
-    return responseUtils.success(res, email);
-  } catch (err) {
-    return responseUtils.serverError(res, err);
-  }
-});
+// Rota para listar emails agrupados por conta
+router.get('/by-account', emailController.listEmailsByAccount);
+
+// Rota para comparar múltiplos emails
+router.get('/compare', emailController.compareEmails);
+
+// Rota para obter detalhes de um email específico
+router.get('/:emailId', emailController.getEmailDetails);
 
 module.exports = router;

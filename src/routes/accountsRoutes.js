@@ -1,17 +1,15 @@
 const express = require('express');
-const router = express.Router({ mergeParams: true }); // importante para acessar userId
+const router = express.Router({ mergeParams: true });
 const accountsController = require('../controllers/accountsController');
+const responseUtils = require('../utils/responseUtil');
 
-// Rotas padrão para gerenciamento de contas
-router.get('/', accountsController.getAllAccounts);
-router.get('/:accountId', accountsController.getAccountById);
-router.get('/:accountId/webhook', accountsController.getAccountWebhook);
-router.post('/', accountsController.createAccount);
-router.put('/:accountId', accountsController.updateAccount);
-router.delete('/:accountId', accountsController.deleteAccount);
+// Rota para listar todas as contas
+router.get('/', accountsController.listAccounts);
 
-// Endpoints específicos para Mautic
-router.get('/:accountId/campaigns', accountsController.getMauticCampaigns);
-router.get('/:accountId/emails', accountsController.getMauticEmails);
+// Rota para obter detalhes de uma conta específica
+router.get('/:accountId', accountsController.getAccountDetails);
+
+// Rota para comparar múltiplas contas
+router.get('/compare', accountsController.compareAccounts);
 
 module.exports = router;
