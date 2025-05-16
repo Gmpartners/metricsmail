@@ -8,11 +8,14 @@ const responseUtils = require('../utils/responseUtil');
 // Rota raiz para obter resumo de métricas
 router.get('/', getMetricsSummary);
 
+// Comparação de métricas (deve vir antes da rota by-*)
+router.get('/compare', metricsController.compareMetrics);
+
 // Rotas de métricas com userId implícito nos parâmetros da rota
 router.get('/by-date', metricsController.getMetricsByDate);
 router.get('/by-account', metricsController.getMetricsByAccount);
 router.get('/by-campaign', metricsController.getMetricsByCampaign);
-router.get('/by-email', metricsController.getMetricsByEmail); // Endpoint para métricas por email
+router.get('/by-email', metricsController.getMetricsByEmail);
 router.get('/opens', metricsController.getOpenedEmails);
 router.get('/last-send', metricsController.getLastSendDate);
 router.get('/rates', metricsController.getRates);
@@ -23,8 +26,5 @@ router.get('/daily-clicks', metricsController.getDailyClicks);
 
 // Rota adicional para obter eventos recentes com filtragem
 router.get('/events', metricsController.getEvents);
-
-// Nova rota para comparação de métricas entre múltiplos itens
-router.get('/compare', metricsController.compareMetrics);
 
 module.exports = router;

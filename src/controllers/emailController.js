@@ -210,12 +210,6 @@ const compareEmails = async (req, res) => {
   }
 };
 
-module.exports = {
-  listEmails,
-  getEmailDetails,
-  compareEmails
-};
-
 // Listar emails agrupados por conta
 const listEmailsByAccount = async (req, res) => {
   try {
@@ -310,7 +304,7 @@ const listEmailsByAccount = async (req, res) => {
   }
 };
 
-// Exportar métodos adicionais
+// Exportar métodos
 module.exports = {
   listEmails,
   getEmailDetails,

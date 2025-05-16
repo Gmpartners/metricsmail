@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const accountsController = require('../controllers/accountsController');
-const responseUtils = require('../utils/responseUtil');
 
 // Rota para comparar múltiplas contas (deve vir antes da rota de ID)
 router.get('/compare', accountsController.compareAccounts);
