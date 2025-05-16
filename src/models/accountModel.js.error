@@ -235,6 +235,7 @@ accountSchema.methods.getMauticEmails = async function() {
   }
 };
 
+const Account = mongoose.model('Account', accountSchema);
 
 // Método para listar leads do Mautic por data
 accountSchema.methods.getMauticLeadsByDate = async function(startDate, endDate) {
@@ -296,6 +297,7 @@ accountSchema.methods.getMauticLeadsByDate = async function(startDate, endDate) 
     return { success: false, message: errorMessage, total: 0 };
   }
 };
+
 const Account = mongoose.model('Account', accountSchema);
 
 module.exports = Account;
