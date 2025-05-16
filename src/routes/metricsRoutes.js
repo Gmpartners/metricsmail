@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true }); // importante para acessar userId
 const metricsController = require('../controllers/metricsController');
+const { getMetricsSummary } = require('../controllers/metricsSummaryController');
 const { Event } = require('../models');
 const responseUtils = require('../utils/responseUtil');
 
 // Rota raiz para obter resumo de métricas
-router.get('/', metricsController.getMetricsSummary);
+router.get('/', getMetricsSummary);
 
 // Rotas de métricas com userId implícito nos parâmetros da rota
 router.get('/by-date', metricsController.getMetricsByDate);
