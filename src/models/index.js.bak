@@ -4,13 +4,11 @@ const Campaign = require('./campaignModel');
 const Email = require('./emailModel');
 const Event = require('./eventModel');
 const Metrics = require('./metricsModel');
-const LeadStats = require('./leadStatsModel');
 
 module.exports = {
   Account,
   Campaign,
   Email,
   Event,
-  Metrics,
-  LeadStats
+  Metrics
 };

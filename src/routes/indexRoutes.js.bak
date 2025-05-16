@@ -4,7 +4,6 @@ const accountsRoutes = require('./accountsRoutes');
 const metricsRoutes = require('./metricsRoutes');
 const emailsRoutes = require('./emailsRoutes');
 const webhooksRoutes = require('./webhooksRoutes');
-const leadStatsRoutes = require('./leadStatsRoutes');
 const apiKeyAuth = require('../middleware/apiKeyMiddleware');
 
 // Rota raiz da API
@@ -31,6 +30,5 @@ router.use(apiKeyAuth);
 router.use('/users/:userId/accounts', accountsRoutes);
 router.use('/users/:userId/metrics', metricsRoutes);
 router.use('/users/:userId/emails', emailsRoutes);
-router.use('/lead-stats', leadStatsRoutes);
 
 module.exports = router;
