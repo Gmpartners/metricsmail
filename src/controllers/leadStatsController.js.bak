@@ -20,7 +20,7 @@ const formatDate = (date) => {
 async function getTodayLeadStats(accountId) {
   try {
     const account = await Account.findById(accountId);
-    if (!account || !account.isConnected) return { success: false, count: 0 };
+    if (!account) return { success: false, count: 0 };
     
     const today = new Date();
     const formattedDate = formatDate(today);
@@ -42,10 +42,10 @@ async function getTodayLeadStats(accountId) {
 // Salvar estatísticas de leads para uma data específica
 const saveLeadStats = async (req, res) => {
   try {
-    const { userId, accountId, date } = req.params;
+    const { accountId, date } = req.params;
     
-    if (!userId || !accountId || !date) {
-      return responseUtils.error(res, 'userId, accountId e date são obrigatórios');
+    if (!accountId || !date) {
+      return responseUtils.error(res, 'accountId e date são obrigatórios');
     }
     
     // Validar formato da data (YYYY-MM-DD)
@@ -53,16 +53,10 @@ const saveLeadStats = async (req, res) => {
       return responseUtils.error(res, 'Data deve estar no formato YYYY-MM-DD');
     }
     
-    // Verificar se a conta existe, pertence ao usuário e está conectada
-    const account = await Account.findOne({
-      _id: accountId,
-      userId: userId,
-      status: 'active',
-      isConnected: true
-    });
-    
+    // Verificar se a conta existe
+    const account = await Account.findById(accountId);
     if (!account) {
-      return responseUtils.notFound(res, 'Conta não encontrada, inativa ou não conectada');
+      return responseUtils.notFound(res, 'Conta não encontrada');
     }
     
     // Definir horário de início e fim do dia
@@ -73,12 +67,12 @@ const saveLeadStats = async (req, res) => {
     const result = await account.getMauticLeadsByDate(startDate, endDate);
     
     if (!result.success) {
-      return responseUtils.error(res, `Falha ao buscar leads: ${result.message}`);
+      return responseUtils.error(res, `Falha ao buscar leads do Mautic: ${result.message}`);
     }
     
     // Salvar ou atualizar estatísticas
     const stats = await LeadStats.findOneAndUpdate(
-      { userId, accountId, date },
+      { accountId, date },
       { count: result.total, lastUpdated: new Date() },
       { upsert: true, new: true }
     );
@@ -92,36 +86,14 @@ const saveLeadStats = async (req, res) => {
 // Obter estatísticas de leads para um período
 const getLeadStats = async (req, res) => {
   try {
-    const { userId } = req.params;
     const { accountIds, startDate, endDate } = req.query;
     
-    if (!userId) {
-      return responseUtils.error(res, 'User ID é obrigatório');
-    }
-    
-    // Filtro de contas
-    let accountFilter = { userId, status: 'active', isConnected: true };
-    
-    // Se tiver IDs específicos de contas, adiciona ao filtro
-    if (accountIds) {
-      const accountIdArray = accountIds.split(',');
-      if (accountIdArray.length > 0) {
-        accountFilter._id = { $in: accountIdArray };
-      }
-    }
-    
-    // Buscar contas ativas e conectadas
-    const accounts = await Account.find(accountFilter, '_id name');
-    
-    if (accounts.length === 0) {
-      return responseUtils.success(res, {
-        datasets: [],
-        summary: { totalLeads: 0, averagePerDay: 0 }
-      });
+    if (!accountIds) {
+      return responseUtils.error(res, 'É necessário especificar pelo menos uma conta');
     }
     
     // Converter parâmetros
-    const accountIdArray = accounts.map(account => account._id.toString());
+    const accountIdArray = accountIds.split(',');
     const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 30 dias atrás
     const end = endDate ? new Date(endDate) : new Date();
     
@@ -132,7 +104,6 @@ const getLeadStats = async (req, res) => {
     
     // Buscar dados históricos do banco
     const historicalStats = await LeadStats.find({
-      userId,
       accountId: { $in: accountIdArray },
       date: { 
         $gte: formattedStartDate,
@@ -178,6 +149,7 @@ const getLeadStats = async (req, res) => {
     }
     
     // Buscar informações das contas para retornar nomes e cores
+    const accounts = await Account.find({ _id: { $in: accountIdArray } }, 'name _id');
     const accountMap = {};
     accounts.forEach(account => {
       accountMap[account._id.toString()] = account.name;
@@ -224,31 +196,13 @@ const getLeadStats = async (req, res) => {
 // Coletar e salvar estatísticas para o dia anterior
 const collectYesterdayStats = async (req, res) => {
   try {
-    const { userId } = req.params;
-    
     // Calcular data de ontem (UTC-3)
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const dateStr = formatDate(yesterday);
     
-    // Filtro base
-    let accountFilter = { status: 'active', isConnected: true };
-    
-    // Se foi fornecido um userId, filtra por usuário específico
-    if (userId) {
-      accountFilter.userId = userId;
-    }
-    
-    // Buscar todas as contas ativas e conectadas
-    const accounts = await Account.find(accountFilter);
-    
-    if (accounts.length === 0) {
-      return responseUtils.success(res, {
-        date: dateStr,
-        results: [],
-        message: "Nenhuma conta ativa e conectada encontrada"
-      });
-    }
+    // Buscar todas as contas ativas
+    const accounts = await Account.find({ status: 'active' });
     
     const results = [];
     
@@ -264,17 +218,12 @@ const collectYesterdayStats = async (req, res) => {
         if (result.success) {
           // Salvar estatísticas
           const stats = await LeadStats.findOneAndUpdate(
-            { 
-              userId: account.userId,
-              accountId: account._id.toString(), 
-              date: dateStr 
-            },
+            { accountId: account._id.toString(), date: dateStr },
             { count: result.total, lastUpdated: new Date() },
             { upsert: true, new: true }
           );
           
           results.push({
-            userId: account.userId,
             accountId: account._id,
             accountName: account.name,
             date: dateStr,
@@ -283,7 +232,6 @@ const collectYesterdayStats = async (req, res) => {
           });
         } else {
           results.push({
-            userId: account.userId,
             accountId: account._id,
             accountName: account.name,
             date: dateStr,
@@ -293,7 +241,6 @@ const collectYesterdayStats = async (req, res) => {
         }
       } catch (error) {
         results.push({
-          userId: account.userId,
           accountId: account._id,
           accountName: account.name,
           date: dateStr,
@@ -305,12 +252,7 @@ const collectYesterdayStats = async (req, res) => {
     
     return responseUtils.success(res, {
       date: dateStr,
-      results,
-      summary: {
-        total: accounts.length,
-        success: results.filter(r => r.success).length,
-        failed: results.filter(r => !r.success).length
-      }
+      results
     });
   } catch (err) {
     return responseUtils.serverError(res, err);
