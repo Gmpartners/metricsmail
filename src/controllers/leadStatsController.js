@@ -104,7 +104,7 @@ const getLeadStats = async (req, res) => {
     
     // Buscar dados históricos do banco
     const historicalStats = await LeadStats.find({
-      accountId: { : accountIdArray },
+      accountId: { $in: accountIdArray },
       date: { 
         : formattedStartDate,
         : formattedEndDate,
