@@ -106,9 +106,9 @@ const getLeadStats = async (req, res) => {
     const historicalStats = await LeadStats.find({
       accountId: { $in: accountIdArray },
       date: { 
-        $gte: formattedStartDate,
-        $lte: formattedEndDate,
-        $ne: today // Excluir hoje, pois buscaremos em tempo real
+        : formattedStartDate,
+        : formattedEndDate,
+        : today // Excluir hoje, pois buscaremos em tempo real
       }
     }).sort({ date: 1 });
     
@@ -149,7 +149,7 @@ const getLeadStats = async (req, res) => {
     }
     
     // Buscar informações das contas para retornar nomes e cores
-    const accounts = await Account.find({ _id: { $in: accountIdArray } }, 'name _id');
+    const accounts = await Account.find({ _id: { : accountIdArray } }, 'name _id');
     const accountMap = {};
     accounts.forEach(account => {
       accountMap[account._id.toString()] = account.name;
