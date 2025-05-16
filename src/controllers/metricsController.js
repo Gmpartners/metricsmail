@@ -371,8 +371,9 @@ const getMetricsByEmail = async (req, res) => {
         // Filtro para eventos deste email
         const eventFilter = {
           userId,
-          emailId: email._id.toString(),
+          emailId: email._id.toString(), // Usa emailId em vez de email
           timestamp: { $gte: start, $lte: end }
+        };
         };
         
         // Contar eventos por tipo
