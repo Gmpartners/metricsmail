@@ -9,8 +9,7 @@ const responseUtils = require('../utils/responseUtil');
  *   "mautic.email_on_open": [{ ... }],
  *   "mautic.email_on_click": [{ ... }],
  *   "mautic.email_on_bounce": [{ ... }],
- *   "mautic.email_on_unsubscribe": [{ ... }],
- *   "mautic.page_on_hit": [{ ... }]
+ *   "mautic.email_on_unsubscribe": [{ ... }]
  * }
  */
 const processMauticWebhook = async (req, res) => {
@@ -62,18 +61,6 @@ const processMauticWebhook = async (req, res) => {
       
       for (const event of clickEvents) {
         const eventResult = await processMauticClickEvent(account, event);
-        if (eventResult) processedEvents.push(eventResult);
-      }
-    }
-    
-    // Processar evento de página visitada (também é contabilizado como clique)
-    if (req.body['mautic.page_on_hit']) {
-      const pageHitEvents = Array.isArray(req.body['mautic.page_on_hit']) 
-        ? req.body['mautic.page_on_hit'] 
-        : [req.body['mautic.page_on_hit']];
-      
-      for (const event of pageHitEvents) {
-        const eventResult = await processMauticPageHitEvent(account, event);
         if (eventResult) processedEvents.push(eventResult);
       }
     }
@@ -139,182 +126,6 @@ const processMauticWebhook = async (req, res) => {
   } catch (err) {
     console.error('Erro ao processar webhook do Mautic:', err);
     return responseUtils.serverError(res, err);
-  }
-};
-
-/**
- * Processa um evento de visita em página do Mautic (clique completo)
- * Formato esperado:
- * {
- *   "hit": {
- *     "id": 673,
- *     "dateHit": "2025-05-16T01:02:53+00:00",
- *     "page": null,
- *     "redirect": [],
- *     "email": {
- *       "id": 30,
- *       "name": "00-GP-21-ZA-7",
- *       "subject": "Complete Your Registration"
- *     },
- *     "lead": {
- *       "id": 231,
- *       "email": "gabrielpaula04@gmail.com",
- *       "firstname": "marcus"
- *     },
- *     "source": "email",
- *     "sourceId": 30
- *   },
- *   "timestamp": "2025-05-16T01:02:54+00:00" 
- * }
- */
-const processMauticPageHitEvent = async (account, eventData) => {
-  try {
-    // Verificar se temos os dados necessários
-    if (!eventData.hit || !eventData.hit.email || !eventData.hit.lead) {
-      console.log('Dados incompletos no evento de visita à página. Tentando processar com dados limitados.');
-      return null;
-    }
-
-    const hit = eventData.hit;
-    
-    // Garantir que o evento veio de um email (source = email)
-    if (hit.source !== 'email') {
-      console.log(`Evento de visita à página com source=${hit.source} ignorado. Apenas eventos provenientes de emails são processados.`);
-      return null;
-    }
-    
-    // Buscar ou criar a campanha
-    // No Mautic, um email pode não estar associado a uma campanha específica
-    // Usamos uma campanha "padrão" para emails sem campanha
-    let campaignId = hit.email.campaign_id || 'default';
-    let campaignName = hit.email.campaign_name || 'Emails sem campanha';
-    
-    let campaign = await Campaign.findOne({ 
-      userId: account.userId,
-      account: account._id,
-      externalId: campaignId
-    });
-    
-    if (!campaign) {
-      campaign = await Campaign.create({
-        userId: account.userId,
-        account: account._id,
-        name: campaignName,
-        externalId: campaignId,
-        provider: 'mautic',
-        status: 'sent' // Valor válido do enum
-      });
-    }
-    
-    // Buscar ou criar o email
-    const emailId = hit.email.id.toString();
-    let email = await Email.findOne({
-      userId: account.userId,
-      account: account._id,
-      externalId: emailId
-    });
-    
-    if (!email) {
-      email = await Email.create({
-        userId: account.userId,
-        account: account._id,
-        campaign: campaign._id,
-        subject: hit.email.subject || 'Sem assunto',
-        externalId: emailId,
-        provider: 'mautic',
-        fromName: hit.email.fromName || 'Mautic',
-        fromEmail: hit.email.fromAddress || 'no-reply@example.com',
-        htmlContent: '<p>Conteúdo não disponível</p>'
-      });
-    }
-    
-    // Criar ID único para este evento
-    const contactId = hit.lead.id ? hit.lead.id.toString() : 'unknown';
-    const contactEmail = hit.lead.email || 'unknown@example.com';
-    const timestamp = hit.dateHit ? new Date(hit.dateHit) : (eventData.timestamp ? new Date(eventData.timestamp) : new Date());
-    
-    // Extrair a URL da page hit (se disponível)
-    const pageUrl = hit.url || hit.query?.page_url || 'URL não disponível';
-
-    // Criar identificador único para rastrear cliques únicos
-    const uniqueIdentifier = `${account._id}-${emailId}-${contactId}-click-${encodeURIComponent(pageUrl)}`;
-    const uniqueExternalId = `${uniqueIdentifier}-${timestamp.getTime()}`;
-    
-    // Verificar se já existe QUALQUER clique deste contato neste link específico do email
-    const existingEvent = await Event.findOne({
-      userId: account.userId,
-      account: account._id,
-      email: email._id,
-      eventType: 'click',
-      contactId: contactId,
-      url: pageUrl
-    });
-    
-    // Determinar se esta é a primeira interação deste tipo para este contato+email+link
-    const isFirstInteraction = !existingEvent;
-    
-    // Verificar se já existe este evento específico para evitar duplicação
-    const exactEvent = await Event.findOne({
-      externalId: uniqueExternalId
-    });
-    
-    if (exactEvent) {
-      console.log('Evento de page hit já registrado exatamente:', uniqueExternalId);
-      return null;
-    }
-    
-    // Criar o evento - nós tratamos page_on_hit como um clique "avançado"
-    const event = await Event.create({
-      userId: account.userId,
-      account: account._id,
-      campaign: campaign._id,
-      email: email._id,
-      eventType: 'click', // Tratamos como clique
-      timestamp: timestamp,
-      contactEmail: contactEmail,
-      contactId: contactId,
-      provider: 'mautic',
-      externalId: uniqueExternalId,
-      url: pageUrl,
-      isFirstInteraction: isFirstInteraction,
-      uniqueIdentifier: uniqueIdentifier,
-      metadata: {
-        hitId: hit.id,
-        eventType: 'page_on_hit', // Armazenamos o tipo original do evento
-        originalPayload: eventData,
-        query: hit.query
-      }
-    });
-    
-    // Atualizar métricas do email, incrementando corretamente métricas totais e únicas
-    const updateFields = {
-      'metrics.clickCount': 1  // Sempre incrementa cliques totais
-    };
-    
-    // Se for o primeiro clique para este contato neste link, incrementa também cliques únicos
-    if (isFirstInteraction) {
-      updateFields['metrics.uniqueClickCount'] = 1;
-    }
-    
-    await Email.findByIdAndUpdate(email._id, { $inc: updateFields });
-    
-    // Atualizar métricas da campanha
-    await Campaign.findByIdAndUpdate(campaign._id, { $inc: updateFields });
-    
-    console.log(`Evento page_on_hit processado com sucesso como um clique: ${pageUrl}`);
-    
-    return {
-      id: event._id,
-      type: 'click',
-      email: email.subject,
-      contact: contactEmail,
-      url: pageUrl,
-      isFirstInteraction: isFirstInteraction,
-      source: 'page_on_hit'
-    };
-  } catch (err) {
-    console.error('Erro ao processar evento de page hit:', err);
-    return null;
   }
 };
 
