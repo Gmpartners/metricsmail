@@ -24,7 +24,7 @@ const processMauticWebhook = async (req, res) => {
     const { webhookId } = req.params;
     
     // Buscar a conta pelo webhookId
-    const account = await Account.findOne({ webhookId });
+    const account = await Account.findOne({ webhookUrl: { $regex: webhookId + "$" } });
     
     if (!account) {
       return responseUtils.notFound(res, 'Webhook não encontrado');
@@ -610,7 +610,10 @@ const processMauticOpenEvent = async (account, eventData) => {
     
     // Criar ID único para este evento
     const contactId = stat.lead.id ? stat.lead.id.toString() : 'unknown';
-    const contactEmail = stat.lead.email || 'unknown@example.com';
+    // CORREÇÃO: Extrair o email real do campo fields.core.email.value
+    const contactEmail = (stat.lead && stat.lead.fields && stat.lead.fields.core && 
+                          stat.lead.fields.core.email && stat.lead.fields.core.email.value) || 
+                          'unknown@example.com';
     const timestamp = stat.dateRead ? new Date(stat.dateRead) : new Date();
     
     // Criar identificador único para contato-email para rastrear interações únicas
@@ -758,7 +761,10 @@ const processMauticClickEvent = async (account, eventData) => {
     
     // Criar ID único para este evento
     const contactId = stat.lead.id ? stat.lead.id.toString() : 'unknown';
-    const contactEmail = stat.lead.email || 'unknown@example.com';
+    // CORREÇÃO: Extrair o email real do campo fields.core.email.value
+    const contactEmail = (stat.lead && stat.lead.fields && stat.lead.fields.core && 
+                          stat.lead.fields.core.email && stat.lead.fields.core.email.value) || 
+                          'unknown@example.com';
     const timestamp = stat.dateClicked ? new Date(stat.dateClicked) : new Date();
     const clickUrl = stat.url || '';
     
@@ -917,7 +923,10 @@ const processMauticBounceEvent = async (account, eventData) => {
     
     // Criar ID único para este evento
     const contactId = stat.lead.id ? stat.lead.id.toString() : 'unknown';
-    const contactEmail = stat.lead.email || 'unknown@example.com';
+    // CORREÇÃO: Extrair o email real do campo fields.core.email.value
+    const contactEmail = (stat.lead && stat.lead.fields && stat.lead.fields.core && 
+                          stat.lead.fields.core.email && stat.lead.fields.core.email.value) || 
+                          'unknown@example.com';
     const timestamp = eventData.timestamp ? new Date(eventData.timestamp) : new Date();
     const bounceType = stat.bounceType || (eventData.reason && eventData.reason.type) || 'hard';
     const bounceMessage = stat.bounceMessage || (eventData.reason && eventData.reason.message) || '';
@@ -1064,7 +1073,10 @@ const processMauticUnsubscribeEvent = async (account, eventData) => {
     
     // Criar ID único para este evento
     const contactId = stat.lead.id ? stat.lead.id.toString() : 'unknown';
-    const contactEmail = stat.lead.email || 'unknown@example.com';
+    // CORREÇÃO: Extrair o email real do campo fields.core.email.value
+    const contactEmail = (stat.lead && stat.lead.fields && stat.lead.fields.core && 
+                          stat.lead.fields.core.email && stat.lead.fields.core.email.value) || 
+                          'unknown@example.com';
     const timestamp = stat.dateUnsubscribed ? new Date(stat.dateUnsubscribed) : (eventData.timestamp ? new Date(eventData.timestamp) : new Date());
     const comments = eventData.preferences && eventData.preferences.comments ? eventData.preferences.comments : '';
     
@@ -1301,16 +1313,3 @@ const processMauticSubscriptionChangeEvent = async (account, eventData) => {
     return null;
   }
 };
-
-/**
- * Processa evento de mudança de inscrição (subscription changed/unsubscribe) do Mautic
- * @param {Object} account - Conta associada ao webhook
- * @param {Object} eventData - Dados do evento de cancelamento de inscrição
- * {
- *   "contact": {...},
- *   "channel": "email",
- *   "old_status": "contactable",
- *   "new_status": "unsubscribed",
- *   "timestamp": "..."
- * }
- */

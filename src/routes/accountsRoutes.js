@@ -8,6 +8,12 @@ router.get('/compare', accountsController.compareAccounts);
 // Rota para listar todas as contas
 router.get('/', accountsController.listAccounts);
 
+// Rota para criar nova conta
+router.post('/', accountsController.createAccount);
+
+// Rota para obter webhook de uma conta específica
+router.get('/:accountId/webhook', accountsController.getAccountWebhook);
+
 // Rota para obter detalhes de uma conta específica (deve vir por último)
 router.get('/:accountId', accountsController.getAccountDetails);
 

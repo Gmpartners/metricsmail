@@ -296,3 +296,81 @@ module.exports = {
   getAccountDetails,
   compareAccounts
 };
+
+// Criar nova conta
+const createAccount = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { name, provider, url, username, password } = req.body;
+    
+    if (!userId || !name || !provider || !url || !username || !password) {
+      return responseUtils.error(res, 'Todos os campos são obrigatórios');
+    }
+    
+    const { v4: uuidv4 } = require('uuid');
+    const webhookId = uuidv4();
+    const baseUrl = process.env.BASE_URL || 'https://metrics.devoltaaojogo.com';
+    
+    // Criar nova conta
+    const newAccount = await Account.create({
+      userId,
+      name,
+      provider,
+      url,
+      credentials: {
+        username,
+        password
+      },
+      webhookUrl: `${baseUrl}/api/webhooks/${webhookId}`,
+      status: 'active',
+      settings: {
+        trackOpens: true,
+        trackClicks: true
+      }
+    });
+    
+    return responseUtils.success(res, newAccount);
+  } catch (err) {
+    return responseUtils.serverError(res, err);
+  }
+};
+
+// Obter webhook de uma conta
+const getAccountWebhook = async (req, res) => {
+  try {
+    const { userId, accountId } = req.params;
+    
+    if (!userId || !accountId) {
+      return responseUtils.error(res, 'User ID e Account ID são obrigatórios');
+    }
+    
+    // Buscar conta
+    const account = await Account.findOne({
+      _id: accountId,
+      userId
+    });
+    
+    if (!account) {
+      return responseUtils.notFound(res, 'Conta não encontrada');
+    }
+    
+    const webhookData = {
+      webhookId: account.webhookUrl ? account.webhookUrl.split('/').pop() : null,
+      webhookUrl: account.webhookUrl,
+      provider: account.provider,
+      instructions: 'Configure este webhook no seu painel Mautic em Configurações > Webhooks. Adicione os eventos: email_on_open, email_on_send, email_on_click, email_on_bounce, email_on_unsubscribe.'
+    };
+    
+    return responseUtils.success(res, webhookData);
+  } catch (err) {
+    return responseUtils.serverError(res, err);
+  }
+};
+
+module.exports = {
+  listAccounts,
+  getAccountDetails,
+  compareAccounts,
+  createAccount,
+  getAccountWebhook
+};
