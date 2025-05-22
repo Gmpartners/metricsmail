@@ -399,7 +399,7 @@ const processMauticSendEvent = async (account, eventData) => {
           account: account._id,
           campaign: campaign._id,
           name: eventData.email?.name || 'Email Mautic',
-        subject: eventData.email?.subject || eventData.subject || 'Email Mautic',
+          subject: eventData.email?.subject || eventData.subject || 'Email Mautic',
           externalId: emailId,
           provider: 'mautic',
           fromName: 'Mautic',
