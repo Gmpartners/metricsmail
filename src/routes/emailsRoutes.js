@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const emailController = require('../controllers/emailController');
-const responseUtils = require('../utils/responseUtil');
+
+// Rota para busca com sugestões (autocomplete)
+router.get('/search/suggestions', emailController.searchEmailsWithSuggestions);
 
 // Rota para listar emails agrupados por conta (deve vir antes da rota de ID)
 router.get('/by-account', emailController.listEmailsByAccount);

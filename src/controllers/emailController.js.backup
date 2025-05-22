@@ -1,8 +1,7 @@
 const { Email, Account } = require('../models');
 const responseUtils = require('../utils/responseUtil');
-const { createSmartSearchFilter, highlightSearchTerms } = require('../utils/smartSearch');
 
-// Listar emails com busca inteligente
+// Listar emails com informação da conta e suporte a múltiplos filtros
 const listEmails = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -11,7 +10,6 @@ const listEmails = async (req, res) => {
       campaignIds, 
       emailIds,
       search,
-      highlight = false,
       limit = 100, 
       page = 1 
     } = req.query;
@@ -47,10 +45,14 @@ const listEmails = async (req, res) => {
       }
     }
     
-    // Busca inteligente que funciona com e sem acentos
+    // Adicionar filtro de busca por texto
     if (search) {
-      const searchFilter = createSmartSearchFilter(search, ['name', 'subject', 'fromName', 'fromEmail']);
-      Object.assign(filter, searchFilter);
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { subject: { $regex: search, $options: 'i' } },
+        { fromName: { $regex: search, $options: 'i' } },
+        { fromEmail: { $regex: search, $options: 'i' } }
+      ];
     }
     
     // Definir paginação
@@ -68,80 +70,25 @@ const listEmails = async (req, res) => {
     // Contar total para paginação
     const totalEmails = await Email.countDocuments(filter);
     
-    // Incluir o nome das contas e destacar termos de busca
+    // Incluir o nome das contas nas métricas para melhor visualização
     const emailsWithAccountInfo = emails.map(email => {
       const emailObj = email.toObject();
+      // Garantir que a informação da conta esteja sempre presente
       emailObj.accountName = email.account ? email.account.name : 'Conta Desconhecida';
       emailObj.accountProvider = email.account ? email.account.provider : 'desconhecido';
-      
-      // Adicionar termos destacados se solicitado
-      if (search && highlight === 'true') {
-        emailObj.highlightedName = highlightSearchTerms(emailObj.name, search);
-        emailObj.highlightedSubject = highlightSearchTerms(emailObj.subject, search);
-        emailObj.highlightedFromName = highlightSearchTerms(emailObj.fromName, search);
-      }
       
       return emailObj;
     });
     
-    // Retornar com informações de paginação e busca
+    // Retornar com informações de paginação
     return responseUtils.success(res, {
       emails: emailsWithAccountInfo,
-      searchInfo: search ? {
-        term: search,
-        resultsCount: totalEmails,
-        highlightEnabled: highlight === 'true'
-      } : null,
       pagination: {
         page: parseInt(page),
         pageSize: parseInt(limit),
         totalItems: totalEmails,
         totalPages: Math.ceil(totalEmails / pageSize)
       }
-    });
-  } catch (err) {
-    return responseUtils.serverError(res, err);
-  }
-};
-
-// Buscar emails com sugestões (autocomplete)
-const searchEmailsWithSuggestions = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { q, limit = 10 } = req.query;
-    
-    if (!userId) {
-      return responseUtils.error(res, 'User ID é obrigatório');
-    }
-    
-    if (!q || q.length < 2) {
-      return responseUtils.success(res, { suggestions: [] });
-    }
-    
-    // Busca inteligente para sugestões
-    const searchFilter = createSmartSearchFilter(q, ['name', 'subject']);
-    const filter = { userId, ...searchFilter };
-    
-    const emails = await Email.find(filter)
-      .select('name subject fromName _id')
-      .populate('account', 'name')
-      .limit(parseInt(limit))
-      .sort({ createdAt: -1 });
-    
-    // Criar sugestões destacadas
-    const suggestions = emails.map(email => ({
-      id: email._id,
-      name: email.name,
-      subject: email.subject,
-      accountName: email.account ? email.account.name : 'Desconhecida',
-      highlightedName: highlightSearchTerms(email.name, q),
-      highlightedSubject: highlightSearchTerms(email.subject, q),
-      type: 'email'
-    }));
-    
-    return responseUtils.success(res, { 
-      query: q,
-      suggestions 
     });
   } catch (err) {
     return responseUtils.serverError(res, err);
@@ -157,6 +104,7 @@ const getEmailDetails = async (req, res) => {
       return responseUtils.error(res, 'User ID e Email ID são obrigatórios');
     }
     
+    // Buscar email com todas as informações relacionadas
     const email = await Email.findOne({
       _id: emailId,
       userId
@@ -168,6 +116,7 @@ const getEmailDetails = async (req, res) => {
       return responseUtils.notFound(res, 'Email não encontrado');
     }
     
+    // Incluir o nome da conta para melhor visualização
     const emailWithAccountInfo = email.toObject();
     emailWithAccountInfo.accountName = email.account ? email.account.name : 'Conta Desconhecida';
     emailWithAccountInfo.accountProvider = email.account ? email.account.provider : 'desconhecido';
@@ -192,12 +141,14 @@ const compareEmails = async (req, res) => {
       return responseUtils.error(res, 'É necessário fornecer IDs de emails para comparação');
     }
     
+    // Processar IDs de emails
     const emailIdArray = emailIds.split(',');
     
     if (emailIdArray.length < 1) {
       return responseUtils.error(res, 'É necessário fornecer pelo menos um email para comparação');
     }
     
+    // Buscar emails
     const emails = await Email.find({
       _id: { $in: emailIdArray },
       userId
@@ -209,11 +160,15 @@ const compareEmails = async (req, res) => {
       return responseUtils.notFound(res, 'Nenhum email encontrado com os IDs fornecidos');
     }
     
+    // Preparar emails com informações da conta para melhor visualização
     const emailsForComparison = emails.map(email => {
       const emailObj = email.toObject();
+      
+      // Garantir que a informação da conta esteja sempre presente
       emailObj.accountName = email.account ? email.account.name : 'Conta Desconhecida';
       emailObj.accountProvider = email.account ? email.account.provider : 'desconhecido';
       
+      // Incluir taxas calculadas se não estiverem presentes
       if (!emailObj.stats || !emailObj.stats.openRate) {
         const m = emailObj.metrics;
         emailObj.stats = {
@@ -228,6 +183,7 @@ const compareEmails = async (req, res) => {
       return emailObj;
     });
     
+    // Agrupar emails por conta para melhor visualização
     const emailsByAccount = {};
     
     emailsForComparison.forEach(email => {
@@ -265,21 +221,30 @@ const listEmailsByAccount = async (req, res) => {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
+    // Buscar contas primeiro
     const accounts = await Account.find({ userId }).sort({ name: 1 });
     
     if (accounts.length === 0) {
       return responseUtils.success(res, { accounts: [], emailsByAccount: {} });
     }
     
+    // Construir filtro base para emails
     const emailFilter = { userId };
     
+    // Adicionar filtro de busca por texto se fornecido
     if (search) {
-      const searchFilter = createSmartSearchFilter(search, ['name', 'subject', 'fromName', 'fromEmail']);
-      Object.assign(emailFilter, searchFilter);
+      emailFilter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { subject: { $regex: search, $options: 'i' } },
+        { fromName: { $regex: search, $options: 'i' } },
+        { fromEmail: { $regex: search, $options: 'i' } }
+      ];
     }
     
+    // Preparar resultado por conta
     const emailsByAccount = {};
     
+    // Inicializar objeto para cada conta
     accounts.forEach(account => {
       emailsByAccount[account._id.toString()] = {
         account: {
@@ -292,6 +257,7 @@ const listEmailsByAccount = async (req, res) => {
       };
     });
     
+    // Buscar emails para todas as contas com paginação
     const pageSize = parseInt(limit);
     const skip = (parseInt(page) - 1) * pageSize;
     
@@ -302,6 +268,7 @@ const listEmailsByAccount = async (req, res) => {
       .skip(skip)
       .limit(pageSize);
     
+    // Agrupar emails por conta
     emails.forEach(email => {
       if (email.account) {
         const accountId = email.account._id.toString();
@@ -316,6 +283,7 @@ const listEmailsByAccount = async (req, res) => {
       }
     });
     
+    // Contar total para paginação
     const totalEmails = await Email.countDocuments(emailFilter);
     
     return responseUtils.success(res, {
@@ -338,9 +306,9 @@ const listEmailsByAccount = async (req, res) => {
   }
 };
 
+// Exportar métodos
 module.exports = {
   listEmails,
-  searchEmailsWithSuggestions,
   getEmailDetails,
   compareEmails,
   listEmailsByAccount

@@ -374,3 +374,241 @@ module.exports = {
   createAccount,
   getAccountWebhook
 };
+
+// Buscar emails diretamente do Mautic
+const getMauticEmails = async (req, res) => {
+  try {
+    const { userId, accountId } = req.params;
+    const { search, limit = 100 } = req.query;
+    
+    if (!userId || !accountId) {
+      return responseUtils.error(res, 'User ID e Account ID são obrigatórios');
+    }
+    
+    // Buscar conta
+    const account = await Account.findOne({
+      _id: accountId,
+      userId
+    });
+    
+    if (!account) {
+      return responseUtils.notFound(res, 'Conta não encontrada');
+    }
+    
+    // Chamar o método do modelo para buscar emails
+    const mauticResponse = await account.getMauticEmails();
+    
+    if (!mauticResponse.success) {
+      return responseUtils.error(res, mauticResponse.message);
+    }
+    
+    let emails = Object.values(mauticResponse.emails || {});
+    
+    // Filtrar por busca se fornecido
+    if (search) {
+      const searchTerm = search.toLowerCase();
+      emails = emails.filter(email => 
+        (email.name && email.name.toLowerCase().includes(searchTerm)) ||
+        (email.subject && email.subject.toLowerCase().includes(searchTerm)) ||
+        (email.fromName && email.fromName.toLowerCase().includes(searchTerm))
+      );
+    }
+    
+    // Aplicar limite
+    if (limit && parseInt(limit) > 0) {
+      emails = emails.slice(0, parseInt(limit));
+    }
+    
+    // Comparar com emails locais para adicionar métricas
+    const emailsWithMetrics = await Promise.all(emails.map(async (mauticEmail) => {
+      // Buscar email local equivalente
+      const localEmail = await Email.findOne({
+        userId,
+        account: account._id,
+        externalId: mauticEmail.id.toString()
+      });
+      
+      return {
+        id: mauticEmail.id,
+        name: mauticEmail.name,
+        subject: mauticEmail.subject,
+        fromName: mauticEmail.fromName,
+        fromEmail: mauticEmail.fromAddress,
+        dateCreated: mauticEmail.dateAdded,
+        dateModified: mauticEmail.dateModified,
+        publishUp: mauticEmail.publishUp,
+        publishDown: mauticEmail.publishDown,
+        readCount: mauticEmail.readCount || 0,
+        sentCount: mauticEmail.sentCount || 0,
+        // Adicionar métricas locais se disponíveis
+        localMetrics: localEmail ? localEmail.metrics : null,
+        hasLocalData: !!localEmail,
+        status: mauticEmail.isPublished ? 'published' : 'draft'
+      };
+    }));
+    
+    return responseUtils.success(res, {
+      source: 'mautic',
+      account: {
+        id: account._id,
+        name: account.name,
+        url: account.url
+      },
+      emails: emailsWithMetrics,
+      total: mauticResponse.total,
+      searchApplied: !!search,
+      searchTerm: search || null
+    });
+  } catch (err) {
+    return responseUtils.serverError(res, err);
+  }
+};
+
+// Buscar campanhas diretamente do Mautic
+const getMauticCampaigns = async (req, res) => {
+  try {
+    const { userId, accountId } = req.params;
+    
+    if (!userId || !accountId) {
+      return responseUtils.error(res, 'User ID e Account ID são obrigatórios');
+    }
+    
+    // Buscar conta
+    const account = await Account.findOne({
+      _id: accountId,
+      userId
+    });
+    
+    if (!account) {
+      return responseUtils.notFound(res, 'Conta não encontrada');
+    }
+    
+    // Chamar o método do modelo para buscar campanhas
+    const mauticResponse = await account.getMauticCampaigns();
+    
+    if (!mauticResponse.success) {
+      return responseUtils.error(res, mauticResponse.message);
+    }
+    
+    return responseUtils.success(res, {
+      source: 'mautic',
+      account: {
+        id: account._id,
+        name: account.name,
+        url: account.url
+      },
+      campaigns: mauticResponse.campaigns,
+      total: mauticResponse.total
+    });
+  } catch (err) {
+    return responseUtils.serverError(res, err);
+  }
+};
+
+// Buscar email específico do Mautic com métricas detalhadas
+const getMauticEmailDetails = async (req, res) => {
+  try {
+    const { userId, accountId, emailId } = req.params;
+    
+    if (!userId || !accountId || !emailId) {
+      return responseUtils.error(res, 'User ID, Account ID e Email ID são obrigatórios');
+    }
+    
+    // Buscar conta
+    const account = await Account.findOne({
+      _id: accountId,
+      userId
+    });
+    
+    if (!account) {
+      return responseUtils.notFound(res, 'Conta não encontrada');
+    }
+    
+    // Buscar todos os emails para encontrar o específico
+    const mauticResponse = await account.getMauticEmails();
+    
+    if (!mauticResponse.success) {
+      return responseUtils.error(res, mauticResponse.message);
+    }
+    
+    // Encontrar o email específico
+    const mauticEmail = mauticResponse.emails.find(email => 
+      email.id.toString() === emailId.toString()
+    );
+    
+    if (!mauticEmail) {
+      return responseUtils.notFound(res, 'Email não encontrado no Mautic');
+    }
+    
+    // Buscar dados locais
+    const localEmail = await Email.findOne({
+      userId,
+      account: account._id,
+      externalId: emailId.toString()
+    });
+    
+    // Buscar eventos locais para este email
+    const events = await Event.find({
+      userId,
+      account: account._id,
+      email: localEmail ? localEmail._id : null
+    }).sort({ timestamp: -1 }).limit(100);
+    
+    // Preparar resposta completa
+    const emailDetails = {
+      id: mauticEmail.id,
+      name: mauticEmail.name,
+      subject: mauticEmail.subject,
+      fromName: mauticEmail.fromName,
+      fromEmail: mauticEmail.fromAddress,
+      dateCreated: mauticEmail.dateAdded,
+      dateModified: mauticEmail.dateModified,
+      publishUp: mauticEmail.publishUp,
+      publishDown: mauticEmail.publishDown,
+      isPublished: mauticEmail.isPublished,
+      // Métricas do Mautic
+      mauticMetrics: {
+        readCount: mauticEmail.readCount || 0,
+        sentCount: mauticEmail.sentCount || 0,
+        variant: {
+          sentCount: mauticEmail.variantSentCount || 0,
+          readCount: mauticEmail.variantReadCount || 0
+        }
+      },
+      // Métricas locais (se disponíveis)
+      localMetrics: localEmail ? localEmail.metrics : null,
+      hasLocalData: !!localEmail,
+      // Eventos recentes
+      recentEvents: events.map(event => ({
+        id: event._id,
+        type: event.eventType,
+        timestamp: event.timestamp,
+        contactEmail: event.contactEmail,
+        url: event.url || null
+      }))
+    };
+    
+    return responseUtils.success(res, {
+      source: 'mautic',
+      account: {
+        id: account._id,
+        name: account.name,
+        url: account.url
+      },
+      email: emailDetails
+    });
+  } catch (err) {
+    return responseUtils.serverError(res, err);
+  }
+};
+
+module.exports = {
+  listAccounts,
+  getAccountDetails,
+  compareAccounts,
+  createAccount,
+  getAccountWebhook,
+  getMauticEmails,
+  getMauticCampaigns,
+  getMauticEmailDetails
+};
