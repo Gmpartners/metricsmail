@@ -291,12 +291,6 @@ const compareAccounts = async (req, res) => {
   }
 };
 
-module.exports = {
-  listAccounts,
-  getAccountDetails,
-  compareAccounts
-};
-
 // Criar nova conta
 const createAccount = async (req, res) => {
   try {
@@ -335,6 +329,103 @@ const createAccount = async (req, res) => {
   }
 };
 
+// Editar conta existente
+const updateAccount = async (req, res) => {
+  try {
+    const { userId, accountId } = req.params;
+    const { name, provider, url, username, password, status } = req.body;
+    
+    if (!userId || !accountId) {
+      return responseUtils.error(res, 'User ID e Account ID são obrigatórios');
+    }
+    
+    // Buscar conta
+    const account = await Account.findOne({
+      _id: accountId,
+      userId
+    });
+    
+    if (!account) {
+      return responseUtils.notFound(res, 'Conta não encontrada');
+    }
+    
+    // Preparar dados para atualização
+    const updateData = {};
+    
+    if (name) updateData.name = name;
+    if (provider) updateData.provider = provider;
+    if (url) updateData.url = url;
+    if (status) updateData.status = status;
+    
+    // Atualizar credenciais se fornecidas
+    if (username || password) {
+      updateData.credentials = { ...account.credentials };
+      if (username) updateData.credentials.username = username;
+      if (password) updateData.credentials.password = password;
+    }
+    
+    // Atualizar a conta
+    const updatedAccount = await Account.findByIdAndUpdate(
+      accountId,
+      updateData,
+      { new: true, runValidators: true }
+    );
+    
+    return responseUtils.success(res, updatedAccount);
+  } catch (err) {
+    return responseUtils.serverError(res, err);
+  }
+};
+
+// Deletar conta
+const deleteAccount = async (req, res) => {
+  try {
+    const { userId, accountId } = req.params;
+    
+    if (!userId || !accountId) {
+      return responseUtils.error(res, 'User ID e Account ID são obrigatórios');
+    }
+    
+    // Buscar conta
+    const account = await Account.findOne({
+      _id: accountId,
+      userId
+    });
+    
+    if (!account) {
+      return responseUtils.notFound(res, 'Conta não encontrada');
+    }
+    
+    // Verificar se há dados relacionados
+    const emailCount = await Email.countDocuments({ 
+      userId,
+      account: accountId 
+    });
+    
+    const eventCount = await Event.countDocuments({ 
+      userId,
+      account: accountId 
+    });
+    
+    // Deletar a conta
+    await Account.findByIdAndDelete(accountId);
+    
+    return responseUtils.success(res, {
+      message: 'Conta deletada com sucesso',
+      deletedAccount: {
+        id: accountId,
+        name: account.name
+      },
+      relatedDataDeleted: {
+        emails: emailCount,
+        events: eventCount
+      }
+    });
+  } catch (err) {
+    return responseUtils.serverError(res, err);
+  }
+};
+
 // Obter webhook de uma conta
 const getAccountWebhook = async (req, res) => {
   try {
@@ -365,14 +456,6 @@ const getAccountWebhook = async (req, res) => {
   } catch (err) {
     return responseUtils.serverError(res, err);
   }
-};
-
-module.exports = {
-  listAccounts,
-  getAccountDetails,
-  compareAccounts,
-  createAccount,
-  getAccountWebhook
 };
 
 // Buscar emails diretamente do Mautic
@@ -607,6 +690,8 @@ module.exports = {
   getAccountDetails,
   compareAccounts,
   createAccount,
+  updateAccount,
+  deleteAccount,
   getAccountWebhook,
   getMauticEmails,
   getMauticCampaigns,

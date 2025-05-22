@@ -431,8 +431,8 @@ const processMauticSendEvent = async (account, eventData) => {
       });
       
       // Atualizar métricas do email
-      // email.metrics.sentCount += 1;
-      await Email.findByIdAndUpdate(email._id, { $inc: { "metrics.sentCount": 1 } });
+      email.metrics.sentCount += 1;
+      await email.save();
       
       return {
         id: event._id,
@@ -531,8 +531,8 @@ const processMauticSendEvent = async (account, eventData) => {
     });
     
     // Atualizar métricas do email
-    // email.metrics.sentCount += 1;
-    await Email.findByIdAndUpdate(email._id, { $inc: { "metrics.sentCount": 1 } });
+    email.metrics.sentCount += 1;
+    await email.save();
     
     return {
       id: event._id,

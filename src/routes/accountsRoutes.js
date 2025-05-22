@@ -17,6 +17,12 @@ router.get('/', accountsController.listAccounts);
 // Rota para criar nova conta
 router.post('/', accountsController.createAccount);
 
+// Rota para editar conta existente
+router.put('/:accountId', accountsController.updateAccount);
+
+// Rota para deletar conta
+router.delete('/:accountId', accountsController.deleteAccount);
+
 // Rota para obter webhook de uma conta específica
 router.get('/:accountId/webhook', accountsController.getAccountWebhook);
 
