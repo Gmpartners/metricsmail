@@ -4,27 +4,42 @@ const Campaign = require('../src/models/campaignModel');
 const Email = require('../src/models/emailModel');
 const Event = require('../src/models/eventModel');
 
-// Verificar se userId foi fornecido
+// Argumentos do script
 const userId = process.argv[2];
+const daysToGenerate = parseInt(process.argv[3]) || 7; // Padrão: últimos 7 dias
+const endDate = process.argv[4] ? new Date(process.argv[4]) : new Date(); // Padrão: hoje
+
 if (!userId) {
   console.error('❌ Erro: UserId é obrigatório!');
-  console.log('📖 Uso: node scripts/populate_historical_data.js {userId}');
-  console.log('📋 Exemplo: node scripts/populate_historical_data.js wBnoxuKZfUUluhg8jwUtQBB3Jgo2');
+  console.log('📖 Uso: node scripts/populate_historical_data.js {userId} [dias] [data-fim]');
+  console.log('📋 Exemplos:');
+  console.log('   node scripts/populate_historical_data.js user123                    # Últimos 7 dias até hoje');
+  console.log('   node scripts/populate_historical_data.js user123 30                # Últimos 30 dias até hoje');
+  console.log('   node scripts/populate_historical_data.js user123 15 2025-06-01     # 15 dias antes de 01/06/2025');
   process.exit(1);
 }
 
-console.log(`🚀 Iniciando população de dados históricos para userId: ${userId}`);
+// Calcular período
+const startDate = new Date(endDate);
+startDate.setDate(startDate.getDate() - daysToGenerate + 1);
+
+console.log(`🚀 Iniciando população de dados históricos`);
+console.log(`👤 UserId: ${userId}`);
+console.log(`📅 Período: ${startDate.toISOString().split('T')[0]} até ${endDate.toISOString().split('T')[0]}`);
+console.log(`📊 Dias a gerar: ${daysToGenerate}`);
 
 // Configuração de dados
 const EMAILS_DATA = [
-  { name: "Newsletter Semanal", subject: "Novidades da Semana - Maio 2025", fromName: "Marketing Team", fromEmail: "newsletter@empresa.com" },
+  { name: "Newsletter Semanal", subject: "Novidades da Semana", fromName: "Marketing Team", fromEmail: "newsletter@empresa.com" },
   { name: "Promoção Flash", subject: "⚡ 50% OFF - Apenas Hoje!", fromName: "Ofertas Especiais", fromEmail: "promocoes@empresa.com" },
   { name: "Boas-vindas", subject: "Bem-vindo(a) à nossa plataforma!", fromName: "Equipe de Sucesso", fromEmail: "sucesso@empresa.com" },
   { name: "Recuperação de Carrinho", subject: "Você esqueceu alguns itens...", fromName: "E-commerce", fromEmail: "carrinho@empresa.com" },
-  { name: "Evento Webinar", subject: "Convite: Webinar Gratuito - Estratégias 2025", fromName: "Eventos", fromEmail: "eventos@empresa.com" },
+  { name: "Evento Webinar", subject: "Convite: Webinar Gratuito - Estratégias de Marketing", fromName: "Eventos", fromEmail: "eventos@empresa.com" },
   { name: "Pesquisa Satisfação", subject: "Como foi sua experiência conosco?", fromName: "Feedback", fromEmail: "pesquisa@empresa.com" },
   { name: "Produto Novo", subject: "🎉 Lançamento: Nova funcionalidade disponível", fromName: "Produto", fromEmail: "produto@empresa.com" },
-  { name: "Newsletter Mensal", subject: "Resumo do Mês - Maio 2025", fromName: "Conteúdo", fromEmail: "conteudo@empresa.com" }
+  { name: "Newsletter Mensal", subject: "Resumo do Mês", fromName: "Conteúdo", fromEmail: "conteudo@empresa.com" },
+  { name: "Black Friday", subject: "🔥 Black Friday Antecipada!", fromName: "Vendas", fromEmail: "vendas@empresa.com" },
+  { name: "Dicas e Tutoriais", subject: "📚 5 Dicas para Melhorar seus Resultados", fromName: "Educação", fromEmail: "educacao@empresa.com" }
 ];
 
 const CONTACTS = [
@@ -37,7 +52,11 @@ const CONTACTS = [
   "diego.araujo@yahoo.com", "renata.sousa@outlook.com", "leonardo.dias@email.com",
   "gabriela.castro@gmail.com", "rafael.monteiro@hotmail.com", "bianca.ramos@yahoo.com",
   "vinicius.teixeira@outlook.com", "isabela.lopes@email.com", "caio.mendes@gmail.com",
-  "amanda.vieira@hotmail.com", "felipe.borges@yahoo.com", "natalia.freitas@outlook.com"
+  "amanda.vieira@hotmail.com", "felipe.borges@yahoo.com", "natalia.freitas@outlook.com",
+  "roberto.silva@email.com", "sandra.oliveira@gmail.com", "eduardo.santos@hotmail.com",
+  "cristina.lima@yahoo.com", "paulo.costa@outlook.com", "daniela.ferreira@email.com",
+  "andre.rodrigues@gmail.com", "monica.alves@hotmail.com", "fernando.moura@yahoo.com",
+  "juliana.gomes@outlook.com", "lucas.barbosa@email.com", "beatriz.rocha@gmail.com"
 ];
 
 // Função para gerar data aleatória dentro de um dia
@@ -52,16 +71,16 @@ function getRandomDateInDay(date) {
 
 // Função para gerar distribuição realista de eventos
 function generateRealisticMetrics(sentCount) {
-  // Taxas realistas do mercado
-  const openRate = 0.18 + Math.random() * 0.12; // 18-30%
-  const clickRate = 0.02 + Math.random() * 0.04; // 2-6%
-  const bounceRate = 0.01 + Math.random() * 0.03; // 1-4%
-  const unsubscribeRate = 0.001 + Math.random() * 0.004; // 0.1-0.5%
+  // Taxas realistas do mercado brasileiro
+  const openRate = 0.15 + Math.random() * 0.20; // 15-35%
+  const clickRate = 0.02 + Math.random() * 0.06; // 2-8%
+  const bounceRate = 0.01 + Math.random() * 0.04; // 1-5%
+  const unsubscribeRate = 0.001 + Math.random() * 0.003; // 0.1-0.4%
   
   const openCount = Math.floor(sentCount * openRate);
-  const uniqueOpenCount = Math.floor(openCount * (0.7 + Math.random() * 0.3)); // 70-100% de opens únicos
+  const uniqueOpenCount = Math.floor(openCount * (0.65 + Math.random() * 0.35)); // 65-100% de opens únicos
   const clickCount = Math.floor(sentCount * clickRate);
-  const uniqueClickCount = Math.floor(clickCount * (0.8 + Math.random() * 0.2)); // 80-100% de clicks únicos
+  const uniqueClickCount = Math.floor(clickCount * (0.75 + Math.random() * 0.25)); // 75-100% de clicks únicos
   const bounceCount = Math.floor(sentCount * bounceRate);
   const unsubscribeCount = Math.floor(sentCount * unsubscribeRate);
   
@@ -80,10 +99,12 @@ async function createEventsForEmail(email, campaign, account, metrics, baseDate)
   const events = [];
   
   // 1. Criar eventos de SEND
-  console.log(`📧 Criando ${email.metrics.sentCount} eventos de envio...`);
+  const sentContacts = [];
   for (let i = 0; i < email.metrics.sentCount; i++) {
     const contact = CONTACTS[i % CONTACTS.length];
     const sendTime = getRandomDateInDay(baseDate);
+    
+    sentContacts.push({ contact, sendTime, contactId: `contact_${Date.now()}_${i}` });
     
     events.push({
       userId: userId,
@@ -93,21 +114,20 @@ async function createEventsForEmail(email, campaign, account, metrics, baseDate)
       eventType: 'send',
       timestamp: sendTime,
       contactEmail: contact,
-      contactId: `contact_${Date.now()}_${i}`,
+      contactId: sentContacts[i].contactId,
       provider: 'mautic',
-      externalId: `${account._id}-${email._id}-contact_${i}-send-${sendTime.getTime()}`,
+      externalId: `${account._id}-${email._id}-${sentContacts[i].contactId}-send-${sendTime.getTime()}`,
       metadata: { simulatedData: true }
     });
   }
   
-  // 2. Criar eventos de OPEN (baseado nos enviados)
-  console.log(`👁️ Criando ${metrics.openCount} eventos de abertura...`);
-  const sentEvents = events.filter(e => e.eventType === 'send');
-  const shuffledSent = [...sentEvents].sort(() => Math.random() - 0.5);
+  // 2. Criar eventos de OPEN
+  const shuffledSent = [...sentContacts].sort(() => Math.random() - 0.5);
+  const openedContacts = shuffledSent.slice(0, metrics.openCount);
   
   for (let i = 0; i < metrics.openCount; i++) {
-    const sendEvent = shuffledSent[i % shuffledSent.length];
-    const openTime = new Date(sendEvent.timestamp.getTime() + Math.random() * 86400000); // Até 24h após envio
+    const sendInfo = openedContacts[i % openedContacts.length];
+    const openTime = new Date(sendInfo.sendTime.getTime() + Math.random() * 48 * 3600000); // Até 48h após envio
     
     const isFirstOpen = i < metrics.uniqueOpenCount;
     
@@ -118,23 +138,22 @@ async function createEventsForEmail(email, campaign, account, metrics, baseDate)
       email: email._id,
       eventType: 'open',
       timestamp: openTime,
-      contactEmail: sendEvent.contactEmail,
-      contactId: sendEvent.contactId,
+      contactEmail: sendInfo.contact,
+      contactId: sendInfo.contactId,
       provider: 'mautic',
-      externalId: `${account._id}-${email._id}-${sendEvent.contactId}-open-${openTime.getTime()}`,
+      externalId: `${account._id}-${email._id}-${sendInfo.contactId}-open-${openTime.getTime()}`,
       isFirstInteraction: isFirstOpen,
-      uniqueIdentifier: `${account._id}-${email._id}-${sendEvent.contactId}-open`,
+      uniqueIdentifier: `${account._id}-${email._id}-${sendInfo.contactId}-open`,
       metadata: { simulatedData: true, trackingHash: `hash_${Math.random().toString(36).substr(2, 16)}` }
     });
   }
   
-  // 3. Criar eventos de CLICK (baseado nos que abriram)
-  console.log(`🖱️ Criando ${metrics.clickCount} eventos de clique...`);
-  const openEvents = events.filter(e => e.eventType === 'open');
+  // 3. Criar eventos de CLICK
+  const clickedContacts = openedContacts.slice(0, Math.floor(openedContacts.length * 0.3)); // 30% dos que abriram clicam
   
   for (let i = 0; i < metrics.clickCount; i++) {
-    const openEvent = openEvents[i % openEvents.length];
-    const clickTime = new Date(openEvent.timestamp.getTime() + Math.random() * 3600000); // Até 1h após abertura
+    const sendInfo = clickedContacts[i % clickedContacts.length];
+    const clickTime = new Date(sendInfo.sendTime.getTime() + Math.random() * 72 * 3600000); // Até 72h após envio
     
     const isFirstClick = i < metrics.uniqueClickCount;
     const urls = [
@@ -142,9 +161,12 @@ async function createEventsForEmail(email, campaign, account, metrics, baseDate)
       'https://empresa.com/promocao',
       'https://empresa.com/blog/artigo',
       'https://empresa.com/contato',
-      'https://empresa.com/cadastro'
+      'https://empresa.com/cadastro',
+      'https://empresa.com/download',
+      'https://empresa.com/webinar',
+      'https://empresa.com/ebook'
     ];
-    const clickUrl = urls[i % urls.length];
+    const clickUrl = urls[Math.floor(Math.random() * urls.length)];
     
     events.push({
       userId: userId,
@@ -153,22 +175,23 @@ async function createEventsForEmail(email, campaign, account, metrics, baseDate)
       email: email._id,
       eventType: 'click',
       timestamp: clickTime,
-      contactEmail: openEvent.contactEmail,
-      contactId: openEvent.contactId,
+      contactEmail: sendInfo.contact,
+      contactId: sendInfo.contactId,
       provider: 'mautic',
-      externalId: `${account._id}-${email._id}-${openEvent.contactId}-click-${clickTime.getTime()}`,
+      externalId: `${account._id}-${email._id}-${sendInfo.contactId}-click-${clickTime.getTime()}`,
       url: clickUrl,
       isFirstInteraction: isFirstClick,
-      uniqueIdentifier: `${account._id}-${email._id}-${openEvent.contactId}-click-${encodeURIComponent(clickUrl)}`,
+      uniqueIdentifier: `${account._id}-${email._id}-${sendInfo.contactId}-click-${encodeURIComponent(clickUrl)}`,
       metadata: { simulatedData: true, trackingHash: `hash_${Math.random().toString(36).substr(2, 16)}` }
     });
   }
   
   // 4. Criar eventos de BOUNCE
-  console.log(`⚠️ Criando ${metrics.bounceCount} eventos de bounce...`);
+  const bouncedContacts = shuffledSent.slice(-metrics.bounceCount); // Últimos da lista
+  
   for (let i = 0; i < metrics.bounceCount; i++) {
-    const sendEvent = shuffledSent[i % shuffledSent.length];
-    const bounceTime = new Date(sendEvent.timestamp.getTime() + Math.random() * 3600000); // Até 1h após envio
+    const sendInfo = bouncedContacts[i % bouncedContacts.length];
+    const bounceTime = new Date(sendInfo.sendTime.getTime() + Math.random() * 3600000); // Até 1h após envio
     
     events.push({
       userId: userId,
@@ -177,23 +200,22 @@ async function createEventsForEmail(email, campaign, account, metrics, baseDate)
       email: email._id,
       eventType: 'bounce',
       timestamp: bounceTime,
-      contactEmail: sendEvent.contactEmail,
-      contactId: sendEvent.contactId,
+      contactEmail: sendInfo.contact,
+      contactId: sendInfo.contactId,
       provider: 'mautic',
-      externalId: `${account._id}-${email._id}-${sendEvent.contactId}-bounce-${bounceTime.getTime()}`,
+      externalId: `${account._id}-${email._id}-${sendInfo.contactId}-bounce-${bounceTime.getTime()}`,
       bounceType: Math.random() > 0.7 ? 'hard' : 'soft',
-      bounceReason: 'Simulated bounce for historical data',
+      bounceReason: 'Simulated bounce for test data',
       isFirstInteraction: true,
-      uniqueIdentifier: `${account._id}-${email._id}-${sendEvent.contactId}-bounce`,
+      uniqueIdentifier: `${account._id}-${email._id}-${sendInfo.contactId}-bounce`,
       metadata: { simulatedData: true, bounceType: Math.random() > 0.7 ? 'hard' : 'soft' }
     });
   }
   
   // 5. Criar eventos de UNSUBSCRIBE
-  console.log(`❌ Criando ${metrics.unsubscribeCount} eventos de unsubscribe...`);
   for (let i = 0; i < metrics.unsubscribeCount; i++) {
-    const sendEvent = shuffledSent[i % shuffledSent.length];
-    const unsubTime = new Date(sendEvent.timestamp.getTime() + Math.random() * 86400000); // Até 24h após envio
+    const sendInfo = shuffledSent[i % shuffledSent.length];
+    const unsubTime = new Date(sendInfo.sendTime.getTime() + Math.random() * 7 * 24 * 3600000); // Até 7 dias após envio
     
     events.push({
       userId: userId,
@@ -202,12 +224,12 @@ async function createEventsForEmail(email, campaign, account, metrics, baseDate)
       email: email._id,
       eventType: 'unsubscribe',
       timestamp: unsubTime,
-      contactEmail: sendEvent.contactEmail,
-      contactId: sendEvent.contactId,
+      contactEmail: sendInfo.contact,
+      contactId: sendInfo.contactId,
       provider: 'mautic',
-      externalId: `${account._id}-${email._id}-${sendEvent.contactId}-unsubscribe-${unsubTime.getTime()}`,
+      externalId: `${account._id}-${email._id}-${sendInfo.contactId}-unsubscribe-${unsubTime.getTime()}`,
       isFirstInteraction: true,
-      uniqueIdentifier: `${account._id}-${email._id}-${sendEvent.contactId}-unsubscribe`,
+      uniqueIdentifier: `${account._id}-${email._id}-${sendInfo.contactId}-unsubscribe`,
       metadata: { simulatedData: true, comments: 'User requested unsubscribe' }
     });
   }
@@ -228,14 +250,18 @@ async function populateHistoricalData() {
       // Criar conta
       account = await Account.create({
         userId: userId,
-        name: 'Conta Histórica Mautic',
+        name: 'Mautic - Conta Principal',
         provider: 'mautic',
         status: 'active',
-        apiKey: `historical_key_${Date.now()}`,
-        apiSecret: `historical_secret_${Date.now()}`,
-        webhookUrl: `https://api.empresa.com/webhooks/${Date.now()}`,
+        apiKey: `mautic_key_${Date.now()}`,
+        apiSecret: `mautic_secret_${Date.now()}`,
+        webhookUrl: `https://api.empresa.com/webhooks/mautic/${Date.now()}`,
         lastSync: new Date(),
-        metadata: { createdBy: 'historical_script' }
+        metadata: { 
+          createdBy: 'populate_script',
+          version: '2.0',
+          environment: 'test'
+        }
       });
       console.log(`✅ Conta criada: ${account.name}`);
     } else {
@@ -245,10 +271,12 @@ async function populateHistoricalData() {
     // 2. Criar campanhas
     const campaigns = [];
     const campaignNames = [
-      'Campanha Newsletter Maio',
+      'Newsletter Semanal',
       'Campanha Promocional',
-      'Campanha Onboarding',
-      'Campanha Reativação'
+      'Onboarding Novos Usuários',
+      'Reengajamento',
+      'Lançamento de Produto',
+      'Black Friday'
     ];
     
     for (const campaignName of campaignNames) {
@@ -266,44 +294,54 @@ async function populateHistoricalData() {
           externalId: `campaign_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           provider: 'mautic',
           status: 'sent',
-          metadata: { createdBy: 'historical_script' }
+          metadata: { 
+            createdBy: 'populate_script',
+            type: campaignName.toLowerCase().replace(/\s+/g, '_')
+          }
         });
       }
       campaigns.push(campaign);
     }
     console.log(`✅ ${campaigns.length} campanhas preparadas`);
     
-    // 3. Criar emails e eventos para cada dia (19/05 a 22/05)
-    const dates = [
-      new Date('2025-05-19'),
-      new Date('2025-05-20'),
-      new Date('2025-05-21'),
-      new Date('2025-05-22')
-    ];
+    // 3. Criar emails e eventos para cada dia
+    const dates = [];
+    const currentDate = new Date(startDate);
+    
+    // Gerar array de datas
+    while (currentDate <= endDate) {
+      dates.push(new Date(currentDate));
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
     
     let totalEvents = 0;
+    let totalEmailsSent = 0;
     
     for (const [dayIndex, date] of dates.entries()) {
-      console.log(`\n📅 Processando dia: ${date.toISOString().split('T')[0]}`);
+      const dayOfWeek = date.getDay();
+      const dateStr = date.toISOString().split('T')[0];
+      console.log(`\n📅 Processando ${dateStr} (${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][dayOfWeek]})`);
       
-      // Determinar quantos emails criar para este dia (1-3 emails por dia)
-      const emailsForDay = dayIndex === 3 ? 1 : Math.floor(Math.random() * 2) + 1; // Último dia só 1 email
+      // Ajustar volume baseado no dia da semana
+      let volumeMultiplier = 1;
+      if (dayOfWeek === 0 || dayOfWeek === 6) volumeMultiplier = 0.3; // Fim de semana: 30%
+      else if (dayOfWeek === 2 || dayOfWeek === 3) volumeMultiplier = 1.2; // Ter/Qua: 120%
+      
+      // Determinar quantos emails criar para este dia (1-4 emails por dia)
+      const emailsForDay = Math.max(1, Math.floor((Math.random() * 3 + 1) * volumeMultiplier));
       
       for (let emailIndex = 0; emailIndex < emailsForDay; emailIndex++) {
         const emailData = EMAILS_DATA[Math.floor(Math.random() * EMAILS_DATA.length)];
         const campaign = campaigns[Math.floor(Math.random() * campaigns.length)];
         
-        // Determinar volume de envios baseado no dia
-        let baseSentCount;
-        if (dayIndex === 0) baseSentCount = 150 + Math.floor(Math.random() * 100); // 19/05: 150-250
-        else if (dayIndex === 1) baseSentCount = 200 + Math.floor(Math.random() * 150); // 20/05: 200-350
-        else if (dayIndex === 2) baseSentCount = 100 + Math.floor(Math.random() * 100); // 21/05: 100-200
-        else baseSentCount = 80 + Math.floor(Math.random() * 70); // 22/05: 80-150
+        // Volume base variando por dia
+        const baseVolume = 200 + Math.floor(Math.random() * 300); // 200-500
+        const baseSentCount = Math.floor(baseVolume * volumeMultiplier);
         
         const metrics = generateRealisticMetrics(baseSentCount);
         
         // Criar email
-        const emailName = `${emailData.name} - ${date.toISOString().split('T')[0]}`;
+        const emailName = `${emailData.name} - ${dateStr}`;
         let email = await Email.findOne({
           userId: userId,
           account: account._id,
@@ -316,12 +354,13 @@ async function populateHistoricalData() {
             account: account._id,
             campaign: campaign._id,
             name: emailName,
-            subject: emailData.subject,
+            subject: `${emailData.subject} - ${date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`,
             fromName: emailData.fromName,
             fromEmail: emailData.fromEmail,
-            htmlContent: `<html><body><h1>${emailData.subject}</h1><p>Este é um email histórico gerado automaticamente para ${date.toISOString().split('T')[0]}.</p></body></html>`,
-            externalId: `historical_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            htmlContent: `<html><body><h1>${emailData.subject}</h1><p>Email enviado em ${date.toLocaleDateString('pt-BR')}</p></body></html>`,
+            externalId: `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             provider: 'mautic',
+            sentDate: date,
             metrics: {
               sentCount: baseSentCount,
               openCount: metrics.openCount,
@@ -329,27 +368,35 @@ async function populateHistoricalData() {
               clickCount: metrics.clickCount,
               uniqueClickCount: metrics.uniqueClickCount,
               bounceCount: metrics.bounceCount,
-              unsubscribeCount: metrics.unsubscribeCount
+              unsubscribeCount: metrics.unsubscribeCount,
+              deliveredCount: baseSentCount - metrics.bounceCount
             },
-            metadata: { createdBy: 'historical_script', originalDate: date }
+            metadata: { 
+              createdBy: 'populate_script',
+              originalDate: date,
+              dayOfWeek: dayOfWeek,
+              volumeMultiplier: volumeMultiplier
+            }
           });
           
           console.log(`✅ Email criado: ${emailName}`);
-          console.log(`   📊 Métricas: ${baseSentCount} enviados, ${metrics.openCount} aberturas, ${metrics.clickCount} cliques`);
+          console.log(`   📊 Métricas: ${baseSentCount} enviados, ${metrics.openCount} aberturas (${(metrics.openCount/baseSentCount*100).toFixed(1)}%), ${metrics.clickCount} cliques (${(metrics.clickCount/baseSentCount*100).toFixed(1)}%)`);
+          
+          totalEmailsSent += baseSentCount;
         }
         
         // Criar eventos para este email
         const events = await createEventsForEmail(email, campaign, account, metrics, date);
         
         // Inserir eventos em lotes para performance
-        const batchSize = 100;
+        const batchSize = 500;
         for (let i = 0; i < events.length; i += batchSize) {
           const batch = events.slice(i, i + batchSize);
-          await Event.insertMany(batch);
+          await Event.insertMany(batch, { ordered: false });
         }
         
         totalEvents += events.length;
-        console.log(`✅ ${events.length} eventos criados para ${emailName}`);
+        console.log(`   ✅ ${events.length} eventos criados`);
         
         // Atualizar métricas das campanhas
         await Campaign.findByIdAndUpdate(campaign._id, {
@@ -367,27 +414,27 @@ async function populateHistoricalData() {
     }
     
     console.log(`\n🎉 DADOS HISTÓRICOS CRIADOS COM SUCESSO!`);
-    console.log(`👤 UserId: ${userId}`);
-    console.log(`📧 Total de eventos criados: ${totalEvents}`);
-    console.log(`📅 Período: 19/05/2025 a 22/05/2025`);
-    console.log(`🏢 Conta: ${account.name}`);
-    console.log(`📊 Campanhas: ${campaigns.length}`);
+    console.log(`📊 RESUMO FINAL:`);
+    console.log(`   👤 UserId: ${userId}`);
+    console.log(`   📅 Período: ${startDate.toISOString().split('T')[0]} até ${endDate.toISOString().split('T')[0]} (${daysToGenerate} dias)`);
+    console.log(`   🏢 Conta: ${account.name}`);
+    console.log(`   📧 Total de emails enviados: ${totalEmailsSent.toLocaleString()}`);
+    console.log(`   🎯 Total de eventos criados: ${totalEvents.toLocaleString()}`);
+    console.log(`   📊 Média diária: ${Math.round(totalEmailsSent / daysToGenerate).toLocaleString()} emails/dia`);
     
-    // Relatório final
+    // Estatísticas finais
     const totalEmails = await Email.countDocuments({ userId: userId });
     const totalEventsCreated = await Event.countDocuments({ userId: userId });
     
-    console.log(`\n📈 RELATÓRIO FINAL:`);
-    console.log(`   Total de emails: ${totalEmails}`);
-    console.log(`   Total de eventos: ${totalEventsCreated}`);
-    console.log(`   Período coberto: 4 dias`);
-    console.log(`   Média de eventos por dia: ${Math.round(totalEventsCreated / 4)}`);
+    console.log(`\n📈 BANCO DE DADOS:`);
+    console.log(`   Total de emails no banco: ${totalEmails}`);
+    console.log(`   Total de eventos no banco: ${totalEventsCreated}`);
     
   } catch (error) {
     console.error('❌ Erro ao popular dados históricos:', error);
   } finally {
     await mongoose.connection.close();
-    console.log('✅ Conexão com MongoDB fechada');
+    console.log('\n✅ Conexão com MongoDB fechada');
     process.exit(0);
   }
 }
