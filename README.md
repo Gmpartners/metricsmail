@@ -1,117 +1,462 @@
-# MetricsMail
+# 📧 MetricsMail API
 
-Dashboard de métricas de email marketing com suporte a múltiplos usuários e integração com várias plataformas (Mautic, Klaviyo, ActiveCampaign, Mailchimp).
+> Sistema completo de métricas para Email Marketing com integração Mautic
 
-## Visão Geral
+[![API Status](https://img.shields.io/badge/API-Online-green)](https://metrics.devoltaaojogo.com/api)
+[![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/Gmpartners/metricsmail)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-MetricsMail é uma API e dashboard para monitoramento de métricas de email marketing que permite a múltiplos usuários acompanhar o desempenho de suas campanhas em diversas plataformas. O sistema coleta, armazena e exibe métricas importantes como taxas de abertura, cliques, rejeições e descadastramento.
+## 🚀 Visão Geral
 
-## Estrutura Multiusuário
+MetricsMail é uma API robusta para análise de métricas de email marketing com conexão direta ao Mautic. Oferece busca inteligente, suporte a acentos, autocomplete e sincronização em tempo real.
 
-O MetricsMail foi projetado desde o início para suportar múltiplos usuários, onde cada usuário tem suas próprias contas, campanhas e métricas. A estrutura da API reflete isso:
+### ✨ Principais Funcionalidades
 
-- Todas as requisições à API incluem o ID do usuário na rota: `/api/users/{userId}/...`
-- Todos os dados são filtrados por `userId` nos controladores
-- Cada modelo (Account, Campaign, Email, Event, Metrics) possui um campo `userId` para separar os dados
+- 📊 **Métricas Completas** - Aberturas, cliques, bounces, descadastros
+- 🔍 **Busca Inteligente** - Suporte total a acentos e cedilha
+- ⚡ **Autocomplete** - Sugestões em tempo real
+- 🔗 **Integração Mautic** - Conexão direta com dados atualizados
+- 📱 **API RESTful** - Fácil integração com qualquer frontend
+- 🎯 **Filtering Avançado** - Por conta, campanha, email específico
 
-Esta abordagem garante que cada usuário só pode acessar e manipular seus próprios dados.
+## 🌐 Base URL
 
-## Tecnologias Utilizadas
+```
+https://metrics.devoltaaojogo.com/api
+```
 
-- **Node.js** - Ambiente de execução
-- **Express** - Framework web
-- **MongoDB** - Banco de dados
-- **Mongoose** - ODM para MongoDB
+## 🔐 Autenticação
 
-## Funcionalidades
-
-- Suporte a múltiplos usuários
-- Integração com múltiplas plataformas de email marketing
-- Visualização unificada de métricas de várias plataformas
-- Dashboard interativo com gráficos e tabelas
-- Filtros por conta, campanha e período
-- API completa para acesso a todos os dados
-
-## Autenticação
-
-O sistema utiliza uma autenticação simples baseada em API Key:
-
-- **API Key**: `MAaDylN2bs0Y01Ep66`
-
-Todas as requisições à API devem incluir esta chave em um dos dois formatos:
-1. Header: `x-api-key: MAaDylN2bs0Y01Ep66`
-2. Query parameter: `?apiKey=MAaDylN2bs0Y01Ep66`
-
-## Instalação e Execução
-
-### Requisitos
-
-- Node.js >= 14.x
-- MongoDB >= 4.x
-
-### Passos
-
-1. Clone o repositório
-2. Instale as dependências:
-   ```bash
-   npm install
-   ```
-3. Configure as variáveis de ambiente copiando o arquivo `.env.example` para `.env` e ajustando conforme necessário
-4. Execute o servidor:
-   ```bash
-   npm run dev
-   ```
-
-### Dados de Teste
-
-Para popular o banco de dados com dados de teste para o usuário "test-user", execute:
+Inclua a API Key em todas as requisições:
 
 ```bash
-node teste-user-dados-fix.js
+# Header (Recomendado)
+x-api-key: MAaDylN2bs0Y01Ep66
+
+# Ou Query Parameter
+?apiKey=MAaDylN2bs0Y01Ep66
 ```
 
-Este script criará contas, campanhas, templates de email, eventos e métricas para o período de 01/05/2025 a 07/05/2025.
+## 🚀 Quick Start
 
-## Endpoints da API
+### Buscar Emails por Nome
 
-Todos os endpoints principais da API seguem o padrão:
-
-```
-/api/users/{userId}/...
-```
-
-### Contas
-
-- `GET /api/users/{userId}/accounts` - Listar todas as contas
-- `GET /api/users/{userId}/accounts/:id` - Obter detalhes de uma conta
-- `POST /api/users/{userId}/accounts` - Criar uma nova conta
-- `PUT /api/users/{userId}/accounts/:id` - Atualizar uma conta
-- `DELETE /api/users/{userId}/accounts/:id` - Excluir uma conta
-- `POST /api/users/{userId}/accounts/:id/test-connection` - Testar conexão com a conta
-
-### Métricas
-
-- `GET /api/users/{userId}/metrics/by-date` - Métricas por data
-- `GET /api/users/{userId}/metrics/by-account` - Métricas por conta
-- `GET /api/users/{userId}/metrics/by-campaign` - Métricas por campanha
-- `GET /api/users/{userId}/metrics/opens` - Emails abertos
-- `GET /api/users/{userId}/metrics/rates` - Taxas (CTR, bounce, unsubscribe)
-- `GET /api/users/{userId}/metrics/send-rate` - Taxa de envio por conta
-- `GET /api/users/{userId}/metrics/daily-sends` - Envios diários
-- `GET /api/users/{userId}/metrics/daily-opens` - Aberturas diárias
-- `GET /api/users/{userId}/metrics/daily-clicks` - Cliques diários
-
-## Interface de Usuário
-
-O sistema inclui uma interface de usuário para visualização dos dados, acessível em:
-
-```
-/apresentacao.html
+```bash
+curl "https://metrics.devoltaaojogo.com/api/users/teste-certo/emails?search=00-GP-21-ZA-7" \
+  -H "x-api-key: MAaDylN2bs0Y01Ep66"
 ```
 
-## Próximas Etapas
+### Conectar Diretamente ao Mautic
 
-- Implementação de autenticação JWT completa
-- Integração com novas plataformas
-- Aprimoramentos na interface de usuário
-- Implementação de webhooks para eventos em tempo real
+```bash
+curl "https://metrics.devoltaaojogo.com/api/users/teste-certo/accounts/682e5d60a408065db40b8938/mautic/emails?search=Complete" \
+  -H "x-api-key: MAaDylN2bs0Y01Ep66"
+```
+
+### Obter Métricas Gerais
+
+```bash
+curl "https://metrics.devoltaaojogo.com/api/users/teste-certo/metrics" \
+  -H "x-api-key: MAaDylN2bs0Y01Ep66"
+```
+
+## 📚 Endpoints Principais
+
+### 📊 Métricas
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/users/{userId}/metrics` | GET | Resumo geral de métricas |
+| `/users/{userId}/metrics/events` | GET | Eventos específicos (aberturas, cliques) |
+| `/users/{userId}/metrics/by-date` | GET | Métricas agrupadas por data |
+
+### 📧 Emails (Database Local)
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/users/{userId}/emails` | GET | Listar emails com busca inteligente |
+| `/users/{userId}/emails/search/suggestions` | GET | Autocomplete/sugestões |
+| `/users/{userId}/emails/{emailId}` | GET | Detalhes de email específico |
+
+### 🔗 Mautic (Conexão Direta)
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/users/{userId}/accounts/{accountId}/mautic/emails` | GET | Emails direto do Mautic |
+| `/users/{userId}/accounts/{accountId}/mautic/campaigns` | GET | Campanhas do Mautic |
+
+### 🏢 Contas
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/users/{userId}/accounts` | GET | Listar contas |
+| `/users/{userId}/accounts/{accountId}` | GET | Detalhes da conta |
+
+## 🔍 Busca Inteligente
+
+### Suporte a Acentos
+
+A API suporta busca com e sem acentos automaticamente:
+
+```bash
+# Ambos funcionam
+curl "...?search=Promoção"  # Com cedilha
+curl "...?search=promocao"  # Sem acentos
+```
+
+### Highlighting
+
+Destaque automático dos termos encontrados:
+
+```bash
+curl "...?search=GP&highlight=true"
+```
+
+**Resposta:**
+```json
+{
+  "highlightedName": "00-<mark>GP</mark>-21-ZA-7"
+}
+```
+
+## 💻 Exemplos de Código
+
+### JavaScript/Frontend
+
+```javascript
+class MetricsMailAPI {
+  constructor() {
+    this.baseURL = 'https://metrics.devoltaaojogo.com/api';
+    this.apiKey = 'MAaDylN2bs0Y01Ep66';
+  }
+  
+  async searchEmails(userId, query, options = {}) {
+    const params = new URLSearchParams({
+      search: query,
+      highlight: options.highlight || 'true',
+      ...options
+    });
+    
+    const response = await fetch(
+      `${this.baseURL}/users/${userId}/emails?${params}`,
+      {
+        headers: { 'x-api-key': this.apiKey }
+      }
+    );
+    
+    return response.json();
+  }
+  
+  async getMauticEmails(userId, accountId, query = '') {
+    const params = query ? `?search=${encodeURIComponent(query)}` : '';
+    
+    const response = await fetch(
+      `${this.baseURL}/users/${userId}/accounts/${accountId}/mautic/emails${params}`,
+      {
+        headers: { 'x-api-key': this.apiKey }
+      }
+    );
+    
+    return response.json();
+  }
+  
+  async getMetrics(userId) {
+    const response = await fetch(
+      `${this.baseURL}/users/${userId}/metrics`,
+      {
+        headers: { 'x-api-key': this.apiKey }
+      }
+    );
+    
+    return response.json();
+  }
+}
+
+// Uso
+const api = new MetricsMailAPI();
+
+// Buscar emails
+const results = await api.searchEmails('teste-certo', '00-GP-21-ZA-7');
+
+// Dados do Mautic
+const mauticData = await api.getMauticEmails(
+  'teste-certo', 
+  '682e5d60a408065db40b8938',
+  'Complete'
+);
+
+// Métricas gerais
+const metrics = await api.getMetrics('teste-certo');
+```
+
+### React Hook
+
+```javascript
+import { useState, useEffect } from 'react';
+
+function useEmailSearch(userId) {
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  
+  const searchEmails = async (query) => {
+    if (!query || query.length < 2) {
+      setResults([]);
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `https://metrics.devoltaaojogo.com/api/users/${userId}/emails/search/suggestions?q=${encodeURIComponent(query)}`,
+        {
+          headers: { 'x-api-key': 'MAaDylN2bs0Y01Ep66' }
+        }
+      );
+      
+      const data = await response.json();
+      setResults(data.data.suggestions || []);
+    } catch (error) {
+      console.error('Erro na busca:', error);
+      setResults([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  return { results, loading, searchEmails };
+}
+
+// Componente
+function EmailSearch() {
+  const { results, loading, searchEmails } = useEmailSearch('teste-certo');
+  const [query, setQuery] = useState('');
+  
+  useEffect(() => {
+    searchEmails(query);
+  }, [query]);
+  
+  return (
+    <div>
+      <input
+        type="text"
+        placeholder="Buscar emails..."
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      
+      {loading && <div>Carregando...</div>}
+      
+      <div className="results">
+        {results.map(email => (
+          <div key={email.id} className="result-item">
+            <h3 dangerouslySetInnerHTML={{ 
+              __html: email.highlightedName 
+            }} />
+            <p dangerouslySetInnerHTML={{ 
+              __html: email.highlightedSubject 
+            }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+### Python
+
+```python
+import requests
+
+class MetricsMailAPI:
+    def __init__(self):
+        self.base_url = "https://metrics.devoltaaojogo.com/api"
+        self.api_key = "MAaDylN2bs0Y01Ep66"
+        self.headers = {"x-api-key": self.api_key}
+    
+    def search_emails(self, user_id, query, highlight=True):
+        params = {
+            "search": query,
+            "highlight": str(highlight).lower()
+        }
+        
+        response = requests.get(
+            f"{self.base_url}/users/{user_id}/emails",
+            headers=self.headers,
+            params=params
+        )
+        
+        return response.json()
+    
+    def get_mautic_emails(self, user_id, account_id, search=None):
+        params = {"search": search} if search else {}
+        
+        response = requests.get(
+            f"{self.base_url}/users/{user_id}/accounts/{account_id}/mautic/emails",
+            headers=self.headers,
+            params=params
+        )
+        
+        return response.json()
+    
+    def get_metrics(self, user_id):
+        response = requests.get(
+            f"{self.base_url}/users/{user_id}/metrics",
+            headers=self.headers
+        )
+        
+        return response.json()
+
+# Uso
+api = MetricsMailAPI()
+
+# Buscar emails
+results = api.search_emails('teste-certo', '00-GP-21-ZA-7')
+
+# Métricas
+metrics = api.get_metrics('teste-certo')
+```
+
+## 📖 Casos de Uso
+
+### 1. Buscar Email por Nome Específico
+
+**Problema:** Encontrar o email "00-GP-21-ZA-7" e suas métricas.
+
+**Solução:**
+```bash
+# Busca local (mais rápida)
+curl "https://metrics.devoltaaojogo.com/api/users/teste-certo/emails?search=00-GP-21-ZA-7&highlight=true"
+
+# Busca no Mautic (sempre atualizada)
+curl "https://metrics.devoltaaojogo.com/api/users/teste-certo/accounts/682e5d60a408065db40b8938/mautic/emails?search=00-GP-21-ZA-7"
+```
+
+### 2. Implementar Autocomplete
+
+**Problema:** Sugestões em tempo real enquanto o usuário digita.
+
+**Solução:**
+```javascript
+const getSuggestions = async (query) => {
+  const response = await fetch(
+    `https://metrics.devoltaaojogo.com/api/users/teste-certo/emails/search/suggestions?q=${query}`,
+    { headers: { 'x-api-key': 'MAaDylN2bs0Y01Ep66' } }
+  );
+  return response.json();
+};
+```
+
+### 3. Dashboard de Métricas
+
+**Problema:** Exibir resumo geral de performance.
+
+**Solução:**
+```bash
+curl "https://metrics.devoltaaojogo.com/api/users/teste-certo/metrics"
+```
+
+### 4. Rastrear Eventos Específicos
+
+**Problema:** Ver quem clicou em um email específico.
+
+**Solução:**
+```bash
+curl "https://metrics.devoltaaojogo.com/api/users/teste-certo/metrics/events?eventType=click&emailIds=682e5de0681420552a725ad2"
+```
+
+## 🔧 Parâmetros Comuns
+
+### Busca e Filtros
+
+| Parâmetro | Tipo | Descrição | Exemplo |
+|-----------|------|-----------|---------|
+| `search` | string | Busca por nome, assunto, remetente | `?search=GP-21` |
+| `highlight` | boolean | Destacar termos encontrados | `?highlight=true` |
+| `accountIds` | string | IDs de contas (separados por vírgula) | `?accountIds=123,456` |
+| `campaignIds` | string | IDs de campanhas | `?campaignIds=789` |
+| `emailIds` | string | IDs de emails específicos | `?emailIds=abc,def` |
+
+### Paginação
+
+| Parâmetro | Tipo | Padrão | Descrição |
+|-----------|------|--------|-----------|
+| `limit` | number | 100 | Número de resultados por página |
+| `page` | number | 1 | Página atual |
+
+### Eventos
+
+| Parâmetro | Tipo | Descrição | Valores |
+|-----------|------|-----------|---------|
+| `eventType` | string | Filtrar por tipo de evento | `send`, `open`, `click`, `bounce`, `unsubscribe` |
+| `contactEmail` | string | Email do contato específico | `user@example.com` |
+| `startDate` | ISO date | Data inicial | `2025-05-01T00:00:00Z` |
+| `endDate` | ISO date | Data final | `2025-05-31T23:59:59Z` |
+
+## ⚡ Performance e Boas Práticas
+
+### 1. Cache
+- Use cache local para dados que não mudam frequentemente
+- TTL recomendado: 5-15 minutos para métricas
+
+### 2. Paginação
+- Sempre use `limit` para listas grandes
+- Máximo recomendado: 100 itens por página
+
+### 3. Busca Local vs Mautic
+- **Local**: Autocomplete, busca rápida, dados históricos
+- **Mautic**: Dados sempre atualizados, emails novos
+
+### 4. Rate Limiting
+- Respeite os limites da API
+- Implemente retry com backoff exponencial
+
+## 🔒 Segurança
+
+- ✅ API Key obrigatória em todas as requisições
+- ✅ HTTPS obrigatório
+- ✅ CORS configurado
+- ✅ Validação de parâmetros
+- ✅ Rate limiting implementado
+
+## 📊 Códigos de Status
+
+| Código | Descrição |
+|--------|-----------|
+| `200` | Sucesso |
+| `400` | Erro na requisição (parâmetros inválidos) |
+| `401` | Não autorizado (API key inválida) |
+| `404` | Recurso não encontrado |
+| `429` | Rate limit excedido |
+| `500` | Erro interno do servidor |
+
+## 🤝 Contribuição
+
+1. Fork o projeto
+2. Crie uma branch (`git checkout -b feature/nova-funcionalidade`)
+3. Commit suas mudanças (`git commit -am 'Adiciona nova funcionalidade'`)
+4. Push para a branch (`git push origin feature/nova-funcionalidade`)
+5. Abra um Pull Request
+
+## 📄 Licença
+
+Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
+
+## 📞 Suporte
+
+- 📧 Email: suporte@devoltaaojogo.com
+- 🌐 Website: [https://metrics.devoltaaojogo.com](https://metrics.devoltaaojogo.com)
+- 📖 Documentação: [API Docs](https://metrics.devoltaaojogo.com/api)
+
+## 🎯 Roadmap
+
+- [ ] GraphQL Support
+- [ ] Webhooks para eventos em tempo real
+- [ ] Dashboard Web integrado
+- [ ] Exportação para Excel/PDF
+- [ ] Integração com outros provedores (Klaviyo, ActiveCampaign)
+- [ ] API de relatórios automatizados
+
+---
+
+**MetricsMail** - Transformando dados de email marketing em insights acionáveis 🚀
