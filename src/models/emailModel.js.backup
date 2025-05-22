@@ -18,6 +18,11 @@ const emailSchema = new mongoose.Schema({
     ref: 'Campaign',
     required: [true, 'A campanha é obrigatória']
   },
+  name: {
+    type: String,
+    required: [true, 'O nome do email é obrigatório'],
+    trim: true
+  },
   subject: {
     type: String,
     required: [true, 'O assunto é obrigatório'],

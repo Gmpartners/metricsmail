@@ -13,6 +13,11 @@ const eventSchema = new mongoose.Schema({
     ref: 'Account',
     required: [true, 'A conta é obrigatória']
   },
+  campaign: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Campaign',
+    required: [true, 'A campanha é obrigatória']
+  },
   email: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Email',
@@ -21,7 +26,7 @@ const eventSchema = new mongoose.Schema({
   eventType: {
     type: String,
     required: [true, 'O tipo de evento é obrigatório'],
-    enum: ['send', 'open', 'click', 'bounce', 'unsubscribe'],
+    enum: ['send', 'delivery', 'open', 'click', 'bounce', 'unsubscribe', 'complaint'],
     index: true
   },
   timestamp: {
@@ -93,11 +98,12 @@ const eventSchema = new mongoose.Schema({
 
 // Índices
 eventSchema.index({ userId: 1, account: 1, eventType: 1, timestamp: -1 });
+eventSchema.index({ userId: 1, campaign: 1, eventType: 1, timestamp: -1 });
 eventSchema.index({ userId: 1, email: 1, eventType: 1, timestamp: -1 });
 eventSchema.index({ userId: 1, contactEmail: 1, eventType: 1, timestamp: -1 });
 eventSchema.index({ userId: 1, externalId: 1 }, { unique: true });
 // Índice para consultas de interações únicas
-eventSchema.index({ email: 1, eventType: 1, isFirstInteraction: 1 });
+eventSchema.index({ campaign: 1, eventType: 1, isFirstInteraction: 1 });
 eventSchema.index({ uniqueIdentifier: 1 }, { unique: true, sparse: true });
 
 const Event = mongoose.model('Event', eventSchema);

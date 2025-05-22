@@ -16,10 +16,9 @@ const metricsSchema = new mongoose.Schema({
     required: [true, 'A conta é obrigatória'],
     index: true
   },
-  // Email específico (opcional - para métricas por email)
-  email: {
+  campaign: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Email',
+    ref: 'Campaign',
     index: true
   },
   
@@ -125,7 +124,7 @@ const metricsSchema = new mongoose.Schema({
 
 // Índices para consultas comuns
 metricsSchema.index({ userId: 1, account: 1, date: -1 });
-metricsSchema.index({ userId: 1, account: 1, email: 1, date: -1 });
+metricsSchema.index({ userId: 1, account: 1, campaign: 1, date: -1 });
 metricsSchema.index({ userId: 1, period: 1, date: -1 });
 
 // Função auxiliar para determinar os limites do período (início e fim)
@@ -167,7 +166,7 @@ const getPeriodBoundaries = (date, period) => {
 
 // Método estático para calcular e salvar métricas com base em eventos reais
 metricsSchema.statics.calculateAndSave = async function(params) {
-  const { userId, account, email, date, period } = params;
+  const { userId, account, campaign, date, period } = params;
   
   if (!userId) {
     throw new Error('User ID é obrigatório para calcular métricas');
@@ -183,8 +182,8 @@ metricsSchema.statics.calculateAndSave = async function(params) {
     timestamp: { $gte: periodStart, $lte: periodEnd }
   };
   
-  if (email) {
-    baseFilter.email = email;
+  if (campaign) {
+    baseFilter.campaign = campaign;
   }
   
   // ----- Contagem de Eventos -----
@@ -196,6 +195,12 @@ metricsSchema.statics.calculateAndSave = async function(params) {
   const sentCount = await Event.countDocuments({
     ...baseFilter,
     eventType: 'send'
+  });
+  
+  // Contagem de entregas
+  const deliveredCount = await Event.countDocuments({
+    ...baseFilter,
+    eventType: 'delivery'
   });
   
   // ----- Aberturas (Totais e Únicas) -----
@@ -244,22 +249,33 @@ metricsSchema.statics.calculateAndSave = async function(params) {
     eventType: 'unsubscribe'
   });
   
+  // ----- Reclamações -----
+  
+  // Contagem de reclamações
+  const complaintCount = await Event.countDocuments({
+    ...baseFilter,
+    eventType: 'complaint'
+  });
+  
   // ----- Cálculo de Taxas -----
   
   // Calcular taxas com base nos contadores
   // Evitar divisão por zero para cada taxa
   
-  // Taxa de abertura (todas as aberturas / emails enviados)
-  const openRate = sentCount > 0 ? (openCount / sentCount) * 100 : 0;
+  // Taxa de entrega (emails entregues / emails enviados)
+  const deliveryRate = sentCount > 0 ? (deliveredCount / sentCount) * 100 : 0;
   
-  // Taxa de abertura única (aberturas únicas / emails enviados)
-  const uniqueOpenRate = sentCount > 0 ? (uniqueOpenCount / sentCount) * 100 : 0;
+  // Taxa de abertura (todas as aberturas / emails entregues)
+  const openRate = deliveredCount > 0 ? (openCount / deliveredCount) * 100 : 0;
   
-  // Taxa de clique (todos os cliques / emails enviados)
-  const clickRate = sentCount > 0 ? (clickCount / sentCount) * 100 : 0;
+  // Taxa de abertura única (aberturas únicas / emails entregues)
+  const uniqueOpenRate = deliveredCount > 0 ? (uniqueOpenCount / deliveredCount) * 100 : 0;
   
-  // Taxa de clique único (cliques únicos / emails enviados)
-  const uniqueClickRate = sentCount > 0 ? (uniqueClickCount / sentCount) * 100 : 0;
+  // Taxa de clique (todos os cliques / emails entregues)
+  const clickRate = deliveredCount > 0 ? (clickCount / deliveredCount) * 100 : 0;
+  
+  // Taxa de clique único (cliques únicos / emails entregues)
+  const uniqueClickRate = deliveredCount > 0 ? (uniqueClickCount / deliveredCount) * 100 : 0;
   
   // Taxa de clique por abertura (cliques únicos / aberturas únicas)
   const clickToOpenRate = uniqueOpenCount > 0 ? (uniqueClickCount / uniqueOpenCount) * 100 : 0;
@@ -267,26 +283,33 @@ metricsSchema.statics.calculateAndSave = async function(params) {
   // Taxa de bounce (bounces / emails enviados)
   const bounceRate = sentCount > 0 ? (bounceCount / sentCount) * 100 : 0;
   
-  // Taxa de unsubscribe (cancelamentos / emails enviados)
-  const unsubscribeRate = sentCount > 0 ? (unsubscribeCount / sentCount) * 100 : 0;
+  // Taxa de unsubscribe (cancelamentos / emails entregues)
+  const unsubscribeRate = deliveredCount > 0 ? (unsubscribeCount / deliveredCount) * 100 : 0;
+  
+  // Taxa de reclamação (reclamações / emails entregues)
+  const complaintRate = deliveredCount > 0 ? (complaintCount / deliveredCount) * 100 : 0;
   
   // Compilar todas as métricas calculadas
   const metrics = {
     totalEvents,
     sentCount,
+    deliveredCount,
     openCount,
     uniqueOpenCount,
     clickCount,
     uniqueClickCount,
     bounceCount,
     unsubscribeCount,
+    complaintCount,
+    deliveryRate,
     openRate,
     uniqueOpenRate,
     clickRate,
     uniqueClickRate,
     clickToOpenRate,
     bounceRate,
-    unsubscribeRate
+    unsubscribeRate,
+    complaintRate
   };
   
   // Preparar filtro para salvar as métricas
@@ -297,8 +320,8 @@ metricsSchema.statics.calculateAndSave = async function(params) {
     date: periodStart // Usamos o início do período para a data de referência
   };
   
-  if (email) {
-    filter.email = email;
+  if (campaign) {
+    filter.campaign = campaign;
   }
   
   // Upsert (atualizar se existir, criar se não existir)

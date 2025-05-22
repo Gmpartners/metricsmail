@@ -13,11 +13,6 @@ const emailSchema = new mongoose.Schema({
     ref: 'Account',
     required: [true, 'A conta é obrigatória']
   },
-  campaign: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Campaign',
-    required: [true, 'A campanha é obrigatória']
-  },
   name: {
     type: String,
     required: [true, 'O nome do email é obrigatório'],
@@ -113,7 +108,7 @@ const emailSchema = new mongoose.Schema({
 });
 
 // Índices
-emailSchema.index({ userId: 1, account: 1, campaign: 1 });
+emailSchema.index({ userId: 1, account: 1 });
 emailSchema.index({ userId: 1, account: 1, externalId: 1 }, { unique: true });
 
 const Email = mongoose.model('Email', emailSchema);
