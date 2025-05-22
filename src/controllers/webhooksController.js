@@ -241,6 +241,7 @@ const processMauticPageHitEvent = async (account, eventData) => {
         userId: account.userId,
         account: account._id,
         campaign: campaign._id,
+        name: hit.email.name || 'Sem nome',
         subject: hit.email.subject || 'Sem assunto',
         externalId: emailId,
         provider: 'mautic',
@@ -252,7 +253,10 @@ const processMauticPageHitEvent = async (account, eventData) => {
     
     // Criar ID único para este evento
     const contactId = hit.lead.id ? hit.lead.id.toString() : 'unknown';
-    const contactEmail = hit.lead.email || 'unknown@example.com';
+    // CORREÇÃO: Extrair o email real do campo fields.core.email.value
+    const contactEmail = (hit.lead && hit.lead.fields && hit.lead.fields.core && 
+                          hit.lead.fields.core.email && hit.lead.fields.core.email.value) || 
+                          'unknown@example.com';
     const timestamp = hit.dateHit ? new Date(hit.dateHit) : (eventData.timestamp ? new Date(eventData.timestamp) : new Date());
     
     // Extrair a URL da page hit (se disponível)
@@ -394,7 +398,8 @@ const processMauticSendEvent = async (account, eventData) => {
           userId: account.userId,
           account: account._id,
           campaign: campaign._id,
-          subject: eventData.email?.subject || eventData.subject || 'Email Mautic',
+          name: eventData.email?.name || 'Email Mautic',
+        subject: eventData.email?.subject || eventData.subject || 'Email Mautic',
           externalId: emailId,
           provider: 'mautic',
           fromName: 'Mautic',
@@ -477,6 +482,7 @@ const processMauticSendEvent = async (account, eventData) => {
         userId: account.userId,
         account: account._id,
         campaign: campaign._id,
+        name: eventData.email.name || 'Sem nome',
         subject: eventData.email.subject || eventData.subject || 'Sem assunto',
         externalId: emailId,
         provider: 'mautic',
@@ -599,6 +605,7 @@ const processMauticOpenEvent = async (account, eventData) => {
         userId: account.userId,
         account: account._id,
         campaign: campaign._id,
+        name: stat.email.name || 'Sem nome',
         subject: stat.email.subject || 'Sem assunto',
         externalId: emailId,
         provider: 'mautic',
@@ -750,6 +757,7 @@ const processMauticClickEvent = async (account, eventData) => {
         userId: account.userId,
         account: account._id,
         campaign: campaign._id,
+        name: stat.email.name || 'Sem nome',
         subject: stat.email.subject || 'Sem assunto',
         externalId: emailId,
         provider: 'mautic',
@@ -912,6 +920,7 @@ const processMauticBounceEvent = async (account, eventData) => {
         userId: account.userId,
         account: account._id,
         campaign: campaign._id,
+        name: stat.email.name || 'Sem nome',
         subject: stat.email.subject || 'Sem assunto',
         externalId: emailId,
         provider: 'mautic',
@@ -1062,6 +1071,7 @@ const processMauticUnsubscribeEvent = async (account, eventData) => {
         userId: account.userId,
         account: account._id,
         campaign: campaign._id,
+        name: stat.email.name || 'Sem nome',
         subject: stat.email.subject || 'Sem assunto',
         externalId: emailId,
         provider: 'mautic',
@@ -1143,10 +1153,6 @@ const processMauticUnsubscribeEvent = async (account, eventData) => {
     console.error('Erro ao processar evento de unsubscribe:', err);
     return null;
   }
-};
-
-module.exports = {
-  processMauticWebhook
 };
 
 /**
@@ -1312,4 +1318,8 @@ const processMauticSubscriptionChangeEvent = async (account, eventData) => {
     console.error('Erro ao processar evento de cancelamento de inscrição:', err);
     return null;
   }
+};
+
+module.exports = {
+  processMauticWebhook
 };

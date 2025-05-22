@@ -39,19 +39,19 @@ const listAccounts = async (req, res) => {
       // Contar eventos por tipo
       const sentCount = await Event.countDocuments({ 
         userId,
-        accountId: account._id.toString(),
+        account: account._id,
         eventType: 'send' 
       });
       
       const openCount = await Event.countDocuments({ 
         userId,
-        accountId: account._id.toString(),
+        account: account._id,
         eventType: 'open' 
       });
       
       const clickCount = await Event.countDocuments({ 
         userId,
-        accountId: account._id.toString(),
+        account: account._id,
         eventType: 'click' 
       });
       
@@ -105,31 +105,31 @@ const getAccountDetails = async (req, res) => {
     // Contar eventos por tipo
     const sentCount = await Event.countDocuments({ 
       userId,
-      accountId: account._id.toString(),
+      account: account._id,
       eventType: 'send' 
     });
     
     const openCount = await Event.countDocuments({ 
       userId,
-      accountId: account._id.toString(),
+      account: account._id,
       eventType: 'open' 
     });
     
     const clickCount = await Event.countDocuments({ 
       userId,
-      accountId: account._id.toString(),
+      account: account._id,
       eventType: 'click' 
     });
     
     const bounceCount = await Event.countDocuments({ 
       userId,
-      accountId: account._id.toString(),
+      account: account._id,
       eventType: 'bounce' 
     });
     
     const unsubscribeCount = await Event.countDocuments({ 
       userId,
-      accountId: account._id.toString(),
+      account: account._id,
       eventType: 'unsubscribe' 
     });
     
@@ -208,31 +208,31 @@ const compareAccounts = async (req, res) => {
       // Contar eventos por tipo
       const sentCount = await Event.countDocuments({ 
         userId,
-        accountId: account._id.toString(),
+        account: account._id,
         eventType: 'send' 
       });
       
       const openCount = await Event.countDocuments({ 
         userId,
-        accountId: account._id.toString(),
+        account: account._id,
         eventType: 'open' 
       });
       
       const clickCount = await Event.countDocuments({ 
         userId,
-        accountId: account._id.toString(),
+        account: account._id,
         eventType: 'click' 
       });
       
       const bounceCount = await Event.countDocuments({ 
         userId,
-        accountId: account._id.toString(),
+        account: account._id,
         eventType: 'bounce' 
       });
       
       const unsubscribeCount = await Event.countDocuments({ 
         userId,
-        accountId: account._id.toString(),
+        account: account._id,
         eventType: 'unsubscribe' 
       });
       
