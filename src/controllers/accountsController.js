@@ -1,7 +1,6 @@
 const { Account, Email, Event } = require('../models');
 const responseUtils = require('../utils/responseUtil');
 
-// Listar contas com suporte a filtros
 const listAccounts = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -11,10 +10,8 @@ const listAccounts = async (req, res) => {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
-    // Construir filtro
     const filter = { userId };
     
-    // Adicionar filtro de contas específicas se fornecido
     if (accountIds) {
       const accountIdArray = accountIds.split(',');
       if (accountIdArray.length > 0) {
@@ -22,21 +19,17 @@ const listAccounts = async (req, res) => {
       }
     }
     
-    // Buscar contas
     const accounts = await Account.find(filter)
       .sort({ name: 1 });
     
-    // Contar emails por conta para estatísticas
     const accountsWithStats = await Promise.all(accounts.map(async (account) => {
       const accountObj = account.toObject();
       
-      // Contar emails nesta conta
       const emailCount = await Email.countDocuments({ 
         userId,
         account: account._id 
       });
       
-      // Contar eventos por tipo
       const sentCount = await Event.countDocuments({ 
         userId,
         account: account._id,
@@ -55,7 +48,6 @@ const listAccounts = async (req, res) => {
         eventType: 'click' 
       });
       
-      // Incluir estatísticas
       accountObj.stats = {
         emailCount,
         sentCount,
@@ -74,7 +66,6 @@ const listAccounts = async (req, res) => {
   }
 };
 
-// Obter detalhes de uma conta específica
 const getAccountDetails = async (req, res) => {
   try {
     const { userId, accountId } = req.params;
@@ -83,7 +74,6 @@ const getAccountDetails = async (req, res) => {
       return responseUtils.error(res, 'User ID e Account ID são obrigatórios');
     }
     
-    // Buscar conta
     const account = await Account.findOne({
       _id: accountId,
       userId
@@ -93,16 +83,13 @@ const getAccountDetails = async (req, res) => {
       return responseUtils.notFound(res, 'Conta não encontrada');
     }
     
-    // Adicionar estatísticas detalhadas
     const accountObj = account.toObject();
     
-    // Contar emails nesta conta
     const emailCount = await Email.countDocuments({ 
       userId,
       account: account._id 
     });
     
-    // Contar eventos por tipo
     const sentCount = await Event.countDocuments({ 
       userId,
       account: account._id,
@@ -133,7 +120,6 @@ const getAccountDetails = async (req, res) => {
       eventType: 'unsubscribe' 
     });
     
-    // Incluir estatísticas
     accountObj.stats = {
       emailCount,
       sentCount,
@@ -147,7 +133,6 @@ const getAccountDetails = async (req, res) => {
       unsubscribeRate: sentCount > 0 ? (unsubscribeCount / sentCount) * 100 : 0
     };
     
-    // Buscar emails relacionados (os 10 mais recentes)
     const recentEmails = await Email.find({
       userId,
       account: account._id
@@ -164,7 +149,6 @@ const getAccountDetails = async (req, res) => {
   }
 };
 
-// Comparar múltiplas contas
 const compareAccounts = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -178,14 +162,12 @@ const compareAccounts = async (req, res) => {
       return responseUtils.error(res, 'É necessário fornecer IDs de contas para comparação');
     }
     
-    // Processar IDs de contas
     const accountIdArray = accountIds.split(',');
     
     if (accountIdArray.length < 1) {
       return responseUtils.error(res, 'É necessário fornecer pelo menos uma conta para comparação');
     }
     
-    // Buscar contas
     const accounts = await Account.find({
       _id: { $in: accountIdArray },
       userId
@@ -195,17 +177,14 @@ const compareAccounts = async (req, res) => {
       return responseUtils.notFound(res, 'Nenhuma conta encontrada com os IDs fornecidos');
     }
     
-    // Preparar contas com estatísticas para comparação
     const accountsForComparison = await Promise.all(accounts.map(async (account) => {
       const accountObj = account.toObject();
       
-      // Contar emails nesta conta
       const emailCount = await Email.countDocuments({ 
         userId,
         account: account._id 
       });
       
-      // Contar eventos por tipo
       const sentCount = await Event.countDocuments({ 
         userId,
         account: account._id,
@@ -236,7 +215,6 @@ const compareAccounts = async (req, res) => {
         eventType: 'unsubscribe' 
       });
       
-      // Incluir estatísticas
       accountObj.stats = {
         emailCount,
         sentCount,
@@ -253,7 +231,6 @@ const compareAccounts = async (req, res) => {
       return accountObj;
     }));
     
-    // Calcular totais e médias para comparação
     const totals = {
       emailCount: 0,
       sentCount: 0,
@@ -263,7 +240,6 @@ const compareAccounts = async (req, res) => {
       unsubscribeCount: 0
     };
     
-    // Calcular totais
     accountsForComparison.forEach(account => {
       totals.emailCount += account.stats.emailCount;
       totals.sentCount += account.stats.sentCount;
@@ -273,7 +249,6 @@ const compareAccounts = async (req, res) => {
       totals.unsubscribeCount += account.stats.unsubscribeCount;
     });
     
-    // Calcular médias
     const averages = {
       openRate: totals.sentCount > 0 ? (totals.openCount / totals.sentCount) * 100 : 0,
       clickRate: totals.sentCount > 0 ? (totals.clickCount / totals.sentCount) * 100 : 0,
@@ -291,7 +266,6 @@ const compareAccounts = async (req, res) => {
   }
 };
 
-// Criar nova conta
 const createAccount = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -305,7 +279,6 @@ const createAccount = async (req, res) => {
     const webhookId = uuidv4();
     const baseUrl = process.env.BASE_URL || 'https://metrics.devoltaaojogo.com';
     
-    // Criar nova conta
     const newAccount = await Account.create({
       userId,
       name,
@@ -329,7 +302,6 @@ const createAccount = async (req, res) => {
   }
 };
 
-// Editar conta existente
 const updateAccount = async (req, res) => {
   try {
     const { userId, accountId } = req.params;
@@ -339,7 +311,6 @@ const updateAccount = async (req, res) => {
       return responseUtils.error(res, 'User ID e Account ID são obrigatórios');
     }
     
-    // Buscar conta
     const account = await Account.findOne({
       _id: accountId,
       userId
@@ -349,7 +320,6 @@ const updateAccount = async (req, res) => {
       return responseUtils.notFound(res, 'Conta não encontrada');
     }
     
-    // Preparar dados para atualização
     const updateData = {};
     
     if (name) updateData.name = name;
@@ -357,14 +327,12 @@ const updateAccount = async (req, res) => {
     if (url) updateData.url = url;
     if (status) updateData.status = status;
     
-    // Atualizar credenciais se fornecidas
     if (username || password) {
       updateData.credentials = { ...account.credentials };
       if (username) updateData.credentials.username = username;
       if (password) updateData.credentials.password = password;
     }
     
-    // Atualizar a conta
     const updatedAccount = await Account.findByIdAndUpdate(
       accountId,
       updateData,
@@ -377,7 +345,6 @@ const updateAccount = async (req, res) => {
   }
 };
 
-// Deletar conta
 const deleteAccount = async (req, res) => {
   try {
     const { userId, accountId } = req.params;
@@ -386,7 +353,6 @@ const deleteAccount = async (req, res) => {
       return responseUtils.error(res, 'User ID e Account ID são obrigatórios');
     }
     
-    // Buscar conta
     const account = await Account.findOne({
       _id: accountId,
       userId
@@ -396,7 +362,6 @@ const deleteAccount = async (req, res) => {
       return responseUtils.notFound(res, 'Conta não encontrada');
     }
     
-    // Verificar se há dados relacionados
     const emailCount = await Email.countDocuments({ 
       userId,
       account: accountId 
@@ -407,7 +372,6 @@ const deleteAccount = async (req, res) => {
       account: accountId 
     });
     
-    // Deletar a conta
     await Account.findByIdAndDelete(accountId);
     
     return responseUtils.success(res, {
@@ -426,7 +390,6 @@ const deleteAccount = async (req, res) => {
   }
 };
 
-// Obter webhook de uma conta
 const getAccountWebhook = async (req, res) => {
   try {
     const { userId, accountId } = req.params;
@@ -435,7 +398,6 @@ const getAccountWebhook = async (req, res) => {
       return responseUtils.error(res, 'User ID e Account ID são obrigatórios');
     }
     
-    // Buscar conta
     const account = await Account.findOne({
       _id: accountId,
       userId
@@ -458,7 +420,6 @@ const getAccountWebhook = async (req, res) => {
   }
 };
 
-// Buscar emails diretamente do Mautic
 const getMauticEmails = async (req, res) => {
   try {
     const { userId, accountId } = req.params;
@@ -468,7 +429,6 @@ const getMauticEmails = async (req, res) => {
       return responseUtils.error(res, 'User ID e Account ID são obrigatórios');
     }
     
-    // Buscar conta
     const account = await Account.findOne({
       _id: accountId,
       userId
@@ -478,7 +438,6 @@ const getMauticEmails = async (req, res) => {
       return responseUtils.notFound(res, 'Conta não encontrada');
     }
     
-    // Chamar o método do modelo para buscar emails
     const mauticResponse = await account.getMauticEmails();
     
     if (!mauticResponse.success) {
@@ -487,7 +446,6 @@ const getMauticEmails = async (req, res) => {
     
     let emails = Object.values(mauticResponse.emails || {});
     
-    // Filtrar por busca se fornecido
     if (search) {
       const searchTerm = search.toLowerCase();
       emails = emails.filter(email => 
@@ -497,14 +455,11 @@ const getMauticEmails = async (req, res) => {
       );
     }
     
-    // Aplicar limite
     if (limit && parseInt(limit) > 0) {
       emails = emails.slice(0, parseInt(limit));
     }
     
-    // Comparar com emails locais para adicionar métricas
     const emailsWithMetrics = await Promise.all(emails.map(async (mauticEmail) => {
-      // Buscar email local equivalente
       const localEmail = await Email.findOne({
         userId,
         account: account._id,
@@ -523,7 +478,6 @@ const getMauticEmails = async (req, res) => {
         publishDown: mauticEmail.publishDown,
         readCount: mauticEmail.readCount || 0,
         sentCount: mauticEmail.sentCount || 0,
-        // Adicionar métricas locais se disponíveis
         localMetrics: localEmail ? localEmail.metrics : null,
         hasLocalData: !!localEmail,
         status: mauticEmail.isPublished ? 'published' : 'draft'
@@ -547,48 +501,6 @@ const getMauticEmails = async (req, res) => {
   }
 };
 
-// Buscar campanhas diretamente do Mautic
-const getMauticCampaigns = async (req, res) => {
-  try {
-    const { userId, accountId } = req.params;
-    
-    if (!userId || !accountId) {
-      return responseUtils.error(res, 'User ID e Account ID são obrigatórios');
-    }
-    
-    // Buscar conta
-    const account = await Account.findOne({
-      _id: accountId,
-      userId
-    });
-    
-    if (!account) {
-      return responseUtils.notFound(res, 'Conta não encontrada');
-    }
-    
-    // Chamar o método do modelo para buscar campanhas
-    const mauticResponse = await account.getMauticCampaigns();
-    
-    if (!mauticResponse.success) {
-      return responseUtils.error(res, mauticResponse.message);
-    }
-    
-    return responseUtils.success(res, {
-      source: 'mautic',
-      account: {
-        id: account._id,
-        name: account.name,
-        url: account.url
-      },
-      campaigns: mauticResponse.campaigns,
-      total: mauticResponse.total
-    });
-  } catch (err) {
-    return responseUtils.serverError(res, err);
-  }
-};
-
-// Buscar email específico do Mautic com métricas detalhadas
 const getMauticEmailDetails = async (req, res) => {
   try {
     const { userId, accountId, emailId } = req.params;
@@ -597,7 +509,6 @@ const getMauticEmailDetails = async (req, res) => {
       return responseUtils.error(res, 'User ID, Account ID e Email ID são obrigatórios');
     }
     
-    // Buscar conta
     const account = await Account.findOne({
       _id: accountId,
       userId
@@ -607,14 +518,12 @@ const getMauticEmailDetails = async (req, res) => {
       return responseUtils.notFound(res, 'Conta não encontrada');
     }
     
-    // Buscar todos os emails para encontrar o específico
     const mauticResponse = await account.getMauticEmails();
     
     if (!mauticResponse.success) {
       return responseUtils.error(res, mauticResponse.message);
     }
     
-    // Encontrar o email específico
     const mauticEmail = mauticResponse.emails.find(email => 
       email.id.toString() === emailId.toString()
     );
@@ -623,21 +532,18 @@ const getMauticEmailDetails = async (req, res) => {
       return responseUtils.notFound(res, 'Email não encontrado no Mautic');
     }
     
-    // Buscar dados locais
     const localEmail = await Email.findOne({
       userId,
       account: account._id,
       externalId: emailId.toString()
     });
     
-    // Buscar eventos locais para este email
     const events = await Event.find({
       userId,
       account: account._id,
       email: localEmail ? localEmail._id : null
     }).sort({ timestamp: -1 }).limit(100);
     
-    // Preparar resposta completa
     const emailDetails = {
       id: mauticEmail.id,
       name: mauticEmail.name,
@@ -649,7 +555,6 @@ const getMauticEmailDetails = async (req, res) => {
       publishUp: mauticEmail.publishUp,
       publishDown: mauticEmail.publishDown,
       isPublished: mauticEmail.isPublished,
-      // Métricas do Mautic
       mauticMetrics: {
         readCount: mauticEmail.readCount || 0,
         sentCount: mauticEmail.sentCount || 0,
@@ -658,10 +563,8 @@ const getMauticEmailDetails = async (req, res) => {
           readCount: mauticEmail.variantReadCount || 0
         }
       },
-      // Métricas locais (se disponíveis)
       localMetrics: localEmail ? localEmail.metrics : null,
       hasLocalData: !!localEmail,
-      // Eventos recentes
       recentEvents: events.map(event => ({
         id: event._id,
         type: event.eventType,
@@ -694,6 +597,5 @@ module.exports = {
   deleteAccount,
   getAccountWebhook,
   getMauticEmails,
-  getMauticCampaigns,
   getMauticEmailDetails
 };

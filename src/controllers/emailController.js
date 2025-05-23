@@ -8,7 +8,6 @@ const listEmails = async (req, res) => {
     const { userId } = req.params;
     const { 
       accountIds, 
-      campaignIds, 
       emailIds,
       search,
       highlight = false,
@@ -28,14 +27,6 @@ const listEmails = async (req, res) => {
       const accountIdArray = accountIds.split(',');
       if (accountIdArray.length > 0) {
         filter.account = { $in: accountIdArray };
-      }
-    }
-    
-    // Processar filtro de múltiplas campanhas
-    if (campaignIds) {
-      const campaignIdArray = campaignIds.split(',');
-      if (campaignIdArray.length > 0) {
-        filter.campaign = { $in: campaignIdArray };
       }
     }
     
@@ -60,8 +51,7 @@ const listEmails = async (req, res) => {
     // Buscar emails com todas as informações relevantes
     const emails = await Email.find(filter)
       .populate('account', 'name provider')
-      .populate('campaign', 'name')
-      .sort({ sentDate: -1, createdAt: -1 })
+      .sort({ createdAt: -1 })
       .skip(skip)
       .limit(pageSize);
     
@@ -161,8 +151,7 @@ const getEmailDetails = async (req, res) => {
       _id: emailId,
       userId
     })
-    .populate('account', 'name provider')
-    .populate('campaign', 'name');
+    .populate('account', 'name provider');
     
     if (!email) {
       return responseUtils.notFound(res, 'Email não encontrado');
@@ -202,8 +191,7 @@ const compareEmails = async (req, res) => {
       _id: { $in: emailIdArray },
       userId
     })
-    .populate('account', 'name provider')
-    .populate('campaign', 'name');
+    .populate('account', 'name provider');
     
     if (emails.length === 0) {
       return responseUtils.notFound(res, 'Nenhum email encontrado com os IDs fornecidos');
@@ -214,16 +202,15 @@ const compareEmails = async (req, res) => {
       emailObj.accountName = email.account ? email.account.name : 'Conta Desconhecida';
       emailObj.accountProvider = email.account ? email.account.provider : 'desconhecido';
       
-      if (!emailObj.stats || !emailObj.stats.openRate) {
-        const m = emailObj.metrics;
-        emailObj.stats = {
-          openRate: m.deliveredCount > 0 ? (m.uniqueOpenCount / m.deliveredCount) * 100 : 0,
-          clickRate: m.deliveredCount > 0 ? (m.uniqueClickCount / m.deliveredCount) * 100 : 0,
-          clickToOpenRate: m.uniqueOpenCount > 0 ? (m.uniqueClickCount / m.uniqueOpenCount) * 100 : 0,
-          bounceRate: m.sentCount > 0 ? (m.bounceCount / m.sentCount) * 100 : 0,
-          unsubscribeRate: m.deliveredCount > 0 ? (m.unsubscribeCount / m.deliveredCount) * 100 : 0,
-        };
-      }
+      // Calcular taxas das métricas do email
+      const m = emailObj.metrics || {};
+      emailObj.stats = {
+        openRate: m.sentCount > 0 ? (m.uniqueOpenCount / m.sentCount) * 100 : 0,
+        clickRate: m.sentCount > 0 ? (m.uniqueClickCount / m.sentCount) * 100 : 0,
+        clickToOpenRate: m.uniqueOpenCount > 0 ? (m.uniqueClickCount / m.uniqueOpenCount) * 100 : 0,
+        bounceRate: m.sentCount > 0 ? (m.bounceCount / m.sentCount) * 100 : 0,
+        unsubscribeRate: m.sentCount > 0 ? (m.unsubscribeCount / m.sentCount) * 100 : 0,
+      };
       
       return emailObj;
     });
@@ -297,8 +284,7 @@ const listEmailsByAccount = async (req, res) => {
     
     const emails = await Email.find(emailFilter)
       .populate('account', 'name provider')
-      .populate('campaign', 'name')
-      .sort({ sentDate: -1, createdAt: -1 })
+      .sort({ createdAt: -1 })
       .skip(skip)
       .limit(pageSize);
     

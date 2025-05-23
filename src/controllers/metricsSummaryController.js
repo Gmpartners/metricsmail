@@ -1,4 +1,4 @@
-const { Metrics, Account, Campaign, Event, Email } = require('../models');
+const { Metrics, Account, Event, Email } = require('../models');
 const responseUtils = require('../utils/responseUtil');
 const dateHelpers = require('../utils/dateHelpersUtil');
 
@@ -51,9 +51,7 @@ const getMetricsSummary = async (req, res) => {
     
     // Obter últimos emails (até 5)
     const recentEmails = await Email.find({ userId })
-      .select('_id subject fromName account campaign sentDate metrics')
       .populate('account', 'name provider')
-      .populate('campaign', 'name')
       .sort({ sentDate: -1 })
       .limit(5);
     

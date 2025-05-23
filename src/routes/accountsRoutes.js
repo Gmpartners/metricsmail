@@ -6,7 +6,6 @@ const accountsController = require('../controllers/accountsController');
 router.get('/:accountId/mautic/emails/search', accountsController.getMauticEmails);
 router.get('/:accountId/mautic/emails/:emailId', accountsController.getMauticEmailDetails);
 router.get('/:accountId/mautic/emails', accountsController.getMauticEmails);
-router.get('/:accountId/mautic/campaigns', accountsController.getMauticCampaigns);
 
 // Rota para comparar múltiplas contas (deve vir antes da rota de ID)
 router.get('/compare', accountsController.compareAccounts);

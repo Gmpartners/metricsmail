@@ -4,18 +4,14 @@ const http = require('http');
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
 
-// Esquema para contas de provedores de email marketing
 const accountSchema = new mongoose.Schema({
-  // Campo ID numérico para APIs
   accountID: {
     type: Number,
     default: function() {
-      // Gerar um ID baseado no timestamp (mais simples que um counter)
       return Math.floor(Date.now() / 1000);
     },
     index: true
   },
-  // Campo userId para identificar o proprietário da conta
   userId: {
     type: String,
     required: [true, 'O ID do usuário é obrigatório'],
@@ -38,7 +34,6 @@ const accountSchema = new mongoose.Schema({
     trim: true
   },
   credentials: {
-    // Armazenamos as credenciais de forma segura
     username: {
       type: String,
       required: [true, 'O usuário é obrigatório']
@@ -46,23 +41,23 @@ const accountSchema = new mongoose.Schema({
     password: {
       type: String,
       required: [true, 'A senha é obrigatória'],
-      select: false // Não retorna a senha em consultas
+      select: false
     },
     apiKey: {
       type: String,
-      select: false // Não retorna a chave da API em consultas
+      select: false
     },
     apiSecret: {
       type: String,
-      select: false // Não retorna o segredo da API em consultas
+      select: false
     },
     accessToken: {
       type: String,
-      select: false // Não retorna o token de acesso em consultas
+      select: false
     },
     refreshToken: {
       type: String,
-      select: false // Não retorna o token de atualização em consultas
+      select: false
     },
     tokenExpiry: {
       type: Date
@@ -94,120 +89,41 @@ const accountSchema = new mongoose.Schema({
     default: {}
   }
 }, {
-  timestamps: true, // Adiciona createdAt e updatedAt
+  timestamps: true,
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
 });
 
-// Índices
 accountSchema.index({ userId: 1, provider: 1 });
 accountSchema.index({ userId: 1, status: 1 });
 
-// Virtual para o número de campanhas
-accountSchema.virtual('campaignsCount', {
-  ref: 'Campaign',
-  localField: '_id',
-  foreignField: 'account',
-  count: true
-});
-
-// Método para listar campanhas do Mautic
-accountSchema.methods.getMauticCampaigns = async function() {
-  try {
-    // Obter credenciais completas incluindo senha
-    const accountWithCredentials = await mongoose.model('Account').findById(this._id).select('+credentials.password');
-    const username = accountWithCredentials.credentials.username;
-    const password = accountWithCredentials.credentials.password;
-    
-    // Preparar a URL base da API
-    let baseUrl = this.url;
-    if (!baseUrl.startsWith('http')) {
-      baseUrl = 'https://' + baseUrl;
-    }
-    
-    // Remover barra final se existir
-    baseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-    
-    // URL da API de campanhas
-    const apiUrl = `${baseUrl}/api/campaigns`;
-    
-    // Criar token de autenticação Basic
-    const auth = Buffer.from(`${username}:${password}`).toString('base64');
-    
-    // Configurar axios
-    const axiosConfig = {
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/json'
-      },
-      httpsAgent: new https.Agent({
-        rejectUnauthorized: false // Apenas em dev! Remover em produção!
-      })
-    };
-    
-    // Fazer a requisição
-    const response = await axios.get(apiUrl, axiosConfig);
-    
-    if (response.status === 200) {
-      return { 
-        success: true, 
-        campaigns: response.data.campaigns || [],
-        total: response.data.total || 0
-      };
-    } else {
-      return { success: false, message: `Falha ao buscar campanhas: Código ${response.status}` };
-    }
-  } catch (error) {
-    console.error('Erro ao buscar campanhas:', error);
-    let errorMessage = 'Falha ao buscar campanhas';
-    
-    if (error.response) {
-      errorMessage = `Erro ${error.response.status}: ${error.response.statusText || 'Falha na autenticação'}`;
-    } else if (error.request) {
-      errorMessage = 'Falha na conexão: servidor não responde';
-    } else {
-      errorMessage = error.message || 'Erro desconhecido ao buscar campanhas';
-    }
-    
-    return { success: false, message: errorMessage, campaigns: [] };
-  }
-};
-
-// Método para listar emails do Mautic
 accountSchema.methods.getMauticEmails = async function() {
   try {
-    // Obter credenciais completas incluindo senha
     const accountWithCredentials = await mongoose.model('Account').findById(this._id).select('+credentials.password');
     const username = accountWithCredentials.credentials.username;
     const password = accountWithCredentials.credentials.password;
     
-    // Preparar a URL base da API
     let baseUrl = this.url;
     if (!baseUrl.startsWith('http')) {
       baseUrl = 'https://' + baseUrl;
     }
     
-    // Remover barra final se existir
     baseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
     
-    // URL da API de emails
     const apiUrl = `${baseUrl}/api/emails`;
     
-    // Criar token de autenticação Basic
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
     
-    // Configurar axios
     const axiosConfig = {
       headers: {
         'Authorization': `Basic ${auth}`,
         'Content-Type': 'application/json'
       },
       httpsAgent: new https.Agent({
-        rejectUnauthorized: false // Apenas em dev! Remover em produção!
+        rejectUnauthorized: false
       })
     };
     
-    // Fazer a requisição
     const response = await axios.get(apiUrl, axiosConfig);
     
     if (response.status === 200) {
@@ -235,42 +151,33 @@ accountSchema.methods.getMauticEmails = async function() {
   }
 };
 
-
-// Método para listar leads do Mautic por data
 accountSchema.methods.getMauticLeadsByDate = async function(startDate, endDate) {
   try {
-    // Obter credenciais completas incluindo senha
     const accountWithCredentials = await mongoose.model('Account').findById(this._id).select('+credentials.password');
     const username = accountWithCredentials.credentials.username;
     const password = accountWithCredentials.credentials.password;
     
-    // Preparar a URL base da API
     let baseUrl = this.url;
     if (!baseUrl.startsWith('http')) {
       baseUrl = 'https://' + baseUrl;
     }
     
-    // Remover barra final se existir
     baseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
     
-    // URL da API de contatos com filtros
     const apiUrl = `${baseUrl}/api/contacts?where[0][col]=dateAdded&where[0][expr]=gte&where[0][val]=${encodeURIComponent(startDate)}&where[1][col]=dateAdded&where[1][expr]=lte&where[1][val]=${encodeURIComponent(endDate)}&limit=1`;
     
-    // Criar token de autenticação Basic
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
     
-    // Configurar axios
     const axiosConfig = {
       headers: {
         'Authorization': `Basic ${auth}`,
         'Content-Type': 'application/json'
       },
       httpsAgent: new https.Agent({
-        rejectUnauthorized: false // Apenas em dev! Remover em produção!
+        rejectUnauthorized: false
       })
     };
     
-    // Fazer a requisição - só precisamos do total, não dos dados completos
     const response = await axios.get(apiUrl, axiosConfig);
     
     if (response.status === 200) {
@@ -296,6 +203,7 @@ accountSchema.methods.getMauticLeadsByDate = async function(startDate, endDate) 
     return { success: false, message: errorMessage, total: 0 };
   }
 };
+
 const Account = mongoose.model('Account', accountSchema);
 
 module.exports = Account;

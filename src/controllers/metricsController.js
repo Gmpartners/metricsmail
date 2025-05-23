@@ -1,10 +1,8 @@
 const mongoose = require("mongoose");
-const { Metrics, Account, Campaign, Event, Email } = require('../models');
+const { Metrics, Account, Event, Email } = require('../models');
 const responseUtils = require('../utils/responseUtil');
 const dateHelpers = require('../utils/dateHelpersUtil');
-const filterUtil = require('../utils/filterUtil');
 
-// Obter métricas por data
 const getMetricsByDate = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -12,7 +10,6 @@ const getMetricsByDate = async (req, res) => {
       startDate, 
       endDate, 
       accountIds, 
-      campaignIds, 
       emailIds, 
       groupBy = 'day' 
     } = req.query;
@@ -21,51 +18,36 @@ const getMetricsByDate = async (req, res) => {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
-    // Validar datas
     const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
     const end = endDate ? new Date(endDate) : new Date();
     
-    // Validar o parâmetro groupBy
     if (!['day', 'week', 'month', 'year'].includes(groupBy)) {
       return responseUtils.error(res, 'O parâmetro groupBy deve ser day, week, month ou year');
     }
     
-    // Construir o filtro
     const filter = {
       date: { $gte: start, $lte: end },
       period: groupBy,
       userId
     };
     
-    // Processar accountIds como array
     if (accountIds) {
       const accountIdArray = accountIds.split(',');
       if (accountIdArray.length > 0) {
-        // Verificar se as contas pertencem ao usuário
         const accounts = await Account.find({ 
           _id: { $in: accountIdArray },
           userId 
         });
         
         if (accounts.length === 0) {
-          return responseUtils.error(res, 'Nenhuma conta encontrada ou as contas não pertencem ao usuário');
+          return responseUtils.error(res, 'Nenhuma conta válida encontrada para o usuário');
         }
         
-        // Usar apenas IDs de contas válidas
         const validAccountIds = accounts.map(account => account._id);
         filter.account = { $in: validAccountIds };
       }
     }
     
-    // Processar campaignIds como array
-    if (campaignIds) {
-      const campaignIdArray = campaignIds.split(',');
-      if (campaignIdArray.length > 0) {
-        filter.campaign = { $in: campaignIdArray };
-      }
-    }
-    
-    // Processar emailIds (se implementado no modelo de métricas)
     if (emailIds) {
       const emailIdArray = emailIds.split(',');
       if (emailIdArray.length > 0) {
@@ -73,11 +55,10 @@ const getMetricsByDate = async (req, res) => {
       }
     }
     
-    // Buscar métricas
     const metrics = await Metrics.find(filter)
       .sort({ date: 1 })
       .populate('account', 'name provider')
-      .populate('campaign', 'name');
+      .populate('email', 'name subject');
     
     return responseUtils.success(res, metrics);
   } catch (err) {
@@ -85,43 +66,35 @@ const getMetricsByDate = async (req, res) => {
   }
 };
 
-// Obter métricas por conta
 const getMetricsByAccount = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { startDate, endDate, campaignIds, accountIds } = req.query;
+    const { startDate, endDate, emailIds, accountIds } = req.query;
     
     if (!userId) {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
-    // Validar datas
     const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
     const end = endDate ? new Date(endDate) : new Date();
     
-    // Determinar quais contas analisar
-    let accountsToAnalyze = [];
+    let accountFilter = { userId };
     
     if (accountIds) {
-      // Se foram especificados IDs específicos
-      const accountIdArray = accountIds.split(',');
-      accountsToAnalyze = await Account.find({ 
-        _id: { $in: accountIdArray },
-        userId
-      }).select('_id name provider');
-    } else {
-      // Usar todas as contas do usuário
-      accountsToAnalyze = await Account.find({ userId }).select('_id name provider');
+      const accountIdArray = accountIds.split(',').filter(id => id.trim());
+      if (accountIdArray.length > 0) {
+        accountFilter._id = { $in: accountIdArray };
+      }
     }
     
-    if (accountsToAnalyze.length === 0) {
+    const accounts = await Account.find(accountFilter);
+    
+    if (accounts.length === 0) {
       return responseUtils.error(res, 'Nenhuma conta encontrada para o usuário');
     }
     
-    // Para cada conta, buscamos suas métricas agregadas
-    const accountMetrics = await Promise.all(
-      accountsToAnalyze.map(async (account) => {
-        // Construir filtro de métricas
+    const accountsWithMetrics = await Promise.all(
+      accounts.map(async (account) => {
         const filter = {
           account: account._id,
           date: { $gte: start, $lte: end },
@@ -129,49 +102,35 @@ const getMetricsByAccount = async (req, res) => {
           userId
         };
         
-        // Processar campaignIds como array
-        if (campaignIds) {
-          const campaignIdArray = campaignIds.split(',');
-          if (campaignIdArray.length > 0) {
-            filter.campaign = { $in: campaignIdArray };
+        if (emailIds) {
+          const emailIdArray = emailIds.split(',');
+          if (emailIdArray.length > 0) {
+            filter.email = { $in: emailIdArray };
           }
         }
         
-        // Buscar métricas desta conta
         const metrics = await Metrics.find(filter);
         
-        // Agregação das métricas para esta conta
-        const aggregatedMetrics = metrics.reduce((acc, curr) => {
-          Object.keys(curr.metrics).forEach(key => {
-            // Se for um contador, somamos
-            if (key.endsWith('Count') || key === 'totalEvents') {
-              acc[key] = (acc[key] || 0) + curr.metrics[key];
-            }
-            // Se for uma taxa, calculamos a média
-            else if (key.endsWith('Rate')) {
-              // Armazena os valores para calcular média ponderada depois
-              if (!acc[`${key}Values`]) {
-                acc[`${key}Values`] = [];
+        const aggregatedMetrics = metrics.reduce((acc, metric) => {
+          Object.keys(metric.metrics).forEach(key => {
+            if (typeof metric.metrics[key] === 'number') {
+              if (key.includes('Rate')) {
+                if (!acc[key + '_values']) acc[key + '_values'] = [];
+                acc[key + '_values'].push(metric.metrics[key]);
+              } else {
+                acc[key] = (acc[key] || 0) + metric.metrics[key];
               }
-              acc[`${key}Values`].push(curr.metrics[key]);
             }
           });
-          
           return acc;
         }, {});
         
-        // Calcular médias para as taxas
         Object.keys(aggregatedMetrics).forEach(key => {
-          if (key.endsWith('Values')) {
-            const rateKey = key.replace('Values', '');
+          if (key.endsWith('_values')) {
+            const rateKey = key.replace('_values', '');
             const values = aggregatedMetrics[key];
-            
-            if (values.length > 0) {
-              // Média simples por enquanto
-              aggregatedMetrics[rateKey] = values.reduce((sum, val) => sum + val, 0) / values.length;
-            }
-            
-            // Remover o array de valores
+            aggregatedMetrics[rateKey] = values.length > 0 ? 
+              values.reduce((sum, val) => sum + val, 0) / values.length : 0;
             delete aggregatedMetrics[key];
           }
         });
@@ -180,131 +139,20 @@ const getMetricsByAccount = async (req, res) => {
           account: {
             id: account._id,
             name: account.name,
-            provider: account.provider
+            provider: account.provider,
+            url: account.url
           },
           metrics: aggregatedMetrics
         };
       })
     );
     
-    return responseUtils.success(res, accountMetrics);
+    return responseUtils.success(res, accountsWithMetrics);
   } catch (err) {
     return responseUtils.serverError(res, err);
   }
 };
 
-// Obter métricas por campanha
-const getMetricsByCampaign = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { startDate, endDate, accountIds, campaignIds } = req.query;
-    
-    if (!userId) {
-      return responseUtils.error(res, 'User ID é obrigatório');
-    }
-    
-    // Validar datas
-    const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
-    const end = endDate ? new Date(endDate) : new Date();
-    
-    // Determinar quais contas considerar
-    let accountFilter = { userId };
-    
-    if (accountIds) {
-      const accountIdArray = accountIds.split(',');
-      if (accountIdArray.length > 0) {
-        accountFilter._id = { $in: accountIdArray };
-      }
-    }
-    
-    // Buscar contas que pertencem ao usuário
-    const accounts = await Account.find(accountFilter).select('_id');
-    
-    if (accounts.length === 0) {
-      return responseUtils.error(res, 'Nenhuma conta encontrada para o usuário');
-    }
-    
-    const accountIdList = accounts.map(account => account._id);
-    
-    // Construir filtro para campanhas
-    let campaignFilter = { account: { $in: accountIdList } };
-    
-    if (campaignIds) {
-      const campaignIdArray = campaignIds.split(',');
-      if (campaignIdArray.length > 0) {
-        campaignFilter._id = { $in: campaignIdArray };
-      }
-    }
-    
-    // Buscar campanhas
-    const campaigns = await Campaign.find(campaignFilter)
-      .populate('account', 'name provider');
-    
-    // Para cada campanha, buscar suas métricas
-    const campaignMetrics = await Promise.all(
-      campaigns.map(async (campaign) => {
-        // Buscar métricas desta campanha
-        const metrics = await Metrics.find({
-          campaign: campaign._id,
-          date: { $gte: start, $lte: end },
-          period: 'day',
-          userId
-        });
-        
-        // Agregar métricas
-        const aggregatedMetrics = metrics.reduce((acc, curr) => {
-          Object.keys(curr.metrics).forEach(key => {
-            if (key.endsWith('Count') || key === 'totalEvents') {
-              acc[key] = (acc[key] || 0) + curr.metrics[key];
-            }
-            else if (key.endsWith('Rate')) {
-              if (!acc[`${key}Values`]) {
-                acc[`${key}Values`] = [];
-              }
-              acc[`${key}Values`].push(curr.metrics[key]);
-            }
-          });
-          return acc;
-        }, {});
-        
-        // Calcular médias para as taxas
-        Object.keys(aggregatedMetrics).forEach(key => {
-          if (key.endsWith('Values')) {
-            const rateKey = key.replace('Values', '');
-            const values = aggregatedMetrics[key];
-            
-            if (values.length > 0) {
-              aggregatedMetrics[rateKey] = values.reduce((sum, val) => sum + val, 0) / values.length;
-            }
-            
-            delete aggregatedMetrics[key];
-          }
-        });
-        
-        return {
-          campaign: {
-            id: campaign._id,
-            name: campaign.name,
-            status: campaign.status,
-            sentDate: campaign.sentDate
-          },
-          account: {
-            id: campaign.account._id,
-            name: campaign.account.name,
-            provider: campaign.account.provider
-          },
-          metrics: aggregatedMetrics
-        };
-      })
-    );
-    
-    return responseUtils.success(res, campaignMetrics);
-  } catch (err) {
-    return responseUtils.serverError(res, err);
-  }
-};
-
-// Obter métricas por email com suporte aprimorado para múltiplos emails
 const getMetricsByEmail = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -312,7 +160,6 @@ const getMetricsByEmail = async (req, res) => {
       startDate, 
       endDate, 
       accountIds, 
-      campaignIds, 
       emailIds,
       limit = 100, 
       page = 1 
@@ -322,25 +169,15 @@ const getMetricsByEmail = async (req, res) => {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
-    // Validar datas
     const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
     const end = endDate ? new Date(endDate) : new Date();
     
-    // Construir filtro para emails
-    const emailFilter = { userId };
+    let emailFilter = { userId };
     
-    // Processar filtros de múltiplos IDs
     if (accountIds) {
       const accountIdArray = accountIds.split(',').filter(id => id.trim());
       if (accountIdArray.length > 0) {
         emailFilter.account = { $in: accountIdArray };
-      }
-    }
-    
-    if (campaignIds) {
-      const campaignIdArray = campaignIds.split(',').filter(id => id.trim());
-      if (campaignIdArray.length > 0) {
-        emailFilter.campaign = { $in: campaignIdArray };
       }
     }
     
@@ -351,162 +188,125 @@ const getMetricsByEmail = async (req, res) => {
       }
     }
     
-    // Definir paginação
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const pageSize = parseInt(limit);
     
-    // Buscar emails com paginação e informações relacionadas
     const emails = await Email.find(emailFilter)
       .populate('account', 'name provider')
-      .populate('campaign', 'name')
-      .sort({ sentDate: -1 })
+      .sort({ createdAt: -1 })
       .skip(skip)
       .limit(pageSize);
     
-    // Contar total para paginação
     const totalEmails = await Email.countDocuments(emailFilter);
     
-    // Para cada email, buscar suas métricas com base em eventos
     const emailsWithMetrics = await Promise.all(
       emails.map(async (email) => {
-        // Filtro para eventos deste email
-        const eventFilter = {
-          userId,
-          email: email._id,  // Email é armazenado como ObjectId
-          timestamp: { $gte: start, $lte: end }
-        };
+        const emailMetrics = await Metrics.find({
+          email: email._id,
+          date: { $gte: start, $lte: end },
+          period: 'day',
+          userId
+        });
         
-        // Contar eventos por tipo
-        const sentCount = await Event.countDocuments({ ...eventFilter, eventType: 'send' });
-        const deliveredCount = await Event.countDocuments({ ...eventFilter, eventType: 'delivery' });
-        const openCount = await Event.countDocuments({ ...eventFilter, eventType: 'open' });
-        const clickCount = await Event.countDocuments({ ...eventFilter, eventType: 'click' });
-        const bounceCount = await Event.countDocuments({ ...eventFilter, eventType: 'bounce' });
-        const unsubscribeCount = await Event.countDocuments({ ...eventFilter, eventType: 'unsubscribe' });
+        let aggregatedMetrics = {};
         
-        // Contar contatos únicos para aberturas e cliques
-        const uniqueOpeners = await Event.distinct('contactEmail', { ...eventFilter, eventType: 'open' });
-        const uniqueClickers = await Event.distinct('contactEmail', { ...eventFilter, eventType: 'click' });
+        if (emailMetrics.length > 0) {
+          aggregatedMetrics = emailMetrics.reduce((acc, metric) => {
+            Object.keys(metric.metrics).forEach(key => {
+              if (typeof metric.metrics[key] === 'number') {
+                if (key.includes('Rate')) {
+                  if (!acc[key + '_values']) acc[key + '_values'] = [];
+                  acc[key + '_values'].push(metric.metrics[key]);
+                } else {
+                  acc[key] = (acc[key] || 0) + metric.metrics[key];
+                }
+              }
+            });
+            return acc;
+          }, {});
+          
+          Object.keys(aggregatedMetrics).forEach(key => {
+            if (key.endsWith('_values')) {
+              const rateKey = key.replace('_values', '');
+              const values = aggregatedMetrics[key];
+              aggregatedMetrics[rateKey] = values.length > 0 ? 
+                values.reduce((sum, val) => sum + val, 0) / values.length : 0;
+              delete aggregatedMetrics[key];
+            }
+          });
+        } else {
+          const eventFilter = {
+            email: email._id,
+            timestamp: { $gte: start, $lte: end },
+            userId
+          };
+          
+          const sentCount = await Event.countDocuments({ ...eventFilter, eventType: 'send' });
+          const openCount = await Event.countDocuments({ ...eventFilter, eventType: 'open' });
+          const uniqueOpenCount = await Event.countDocuments({ ...eventFilter, eventType: 'open', isFirstInteraction: true });
+          const clickCount = await Event.countDocuments({ ...eventFilter, eventType: 'click' });
+          const uniqueClickCount = await Event.countDocuments({ ...eventFilter, eventType: 'click', isFirstInteraction: true });
+          const bounceCount = await Event.countDocuments({ ...eventFilter, eventType: 'bounce' });
+          const unsubscribeCount = await Event.countDocuments({ ...eventFilter, eventType: 'unsubscribe' });
+          
+          const openRate = sentCount > 0 ? (openCount / sentCount) * 100 : 0;
+          const uniqueOpenRate = sentCount > 0 ? (uniqueOpenCount / sentCount) * 100 : 0;
+          const clickRate = sentCount > 0 ? (clickCount / sentCount) * 100 : 0;
+          const uniqueClickRate = sentCount > 0 ? (uniqueClickCount / sentCount) * 100 : 0;
+          const clickToOpenRate = uniqueOpenCount > 0 ? (uniqueClickCount / uniqueOpenCount) * 100 : 0;
+          const bounceRate = sentCount > 0 ? (bounceCount / sentCount) * 100 : 0;
+          const unsubscribeRate = sentCount > 0 ? (unsubscribeCount / sentCount) * 100 : 0;
+          
+          aggregatedMetrics = {
+            sentCount,
+            openCount,
+            uniqueOpenCount,
+            clickCount,
+            uniqueClickCount,
+            bounceCount,
+            unsubscribeCount,
+            openRate,
+            uniqueOpenRate,
+            clickRate,
+            uniqueClickRate,
+            clickToOpenRate,
+            bounceRate,
+            unsubscribeRate
+          };
+        }
         
-        // Buscar contatos recentes que abriram ou clicaram (até 5)
-        const recentInteractions = await Event.find({
-          ...eventFilter,
-          eventType: { $in: ['open', 'click'] }
-        })
-        .sort({ timestamp: -1 })
-        .limit(5);
-        
-        // Formatar interações recentes
-        const recentContacts = recentInteractions.map(event => ({
-          contactEmail: event.contactEmail,
-          eventType: event.eventType,
-          timestamp: event.timestamp
-        }));
-        
-        // Métricas calculadas
-        const metrics = {
-          sentCount,
-          deliveredCount,
-          openCount,
-          uniqueOpenCount: uniqueOpeners.length,
-          clickCount,
-          uniqueClickCount: uniqueClickers.length,
-          bounceCount,
-          unsubscribeCount
-        };
-        
-        // Calcular taxas
-        const openRate = deliveredCount > 0 ? (uniqueOpeners.length / deliveredCount) * 100 : 0;
-        const clickRate = deliveredCount > 0 ? (uniqueClickers.length / deliveredCount) * 100 : 0;
-        const bounceRate = sentCount > 0 ? (bounceCount / sentCount) * 100 : 0;
-        const unsubscribeRate = deliveredCount > 0 ? (unsubscribeCount / deliveredCount) * 100 : 0;
-        const clickToOpenRate = uniqueOpeners.length > 0 ? (uniqueClickers.length / uniqueOpeners.length) * 100 : 0;
-        
-        // Retornar dados formatados para o email
         return {
-          id: email._id,
-          emailId: email._id.toString(), // Adiciona o campo emailId para o frontend
+          emailId: email._id.toString(),
           subject: email.subject,
-          sentDate: email.sentDate,
+          name: email.name,
+          createdAt: email.createdAt,
           fromName: email.fromName,
           fromEmail: email.fromEmail,
-          campaign: email.campaign ? {
-            id: email.campaign._id,
-            name: email.campaign.name,
-            campaignId: email.campaign._id.toString() // Adiciona o campo campaignId para o frontend
-          } : null,
           account: email.account ? {
             id: email.account._id,
             name: email.account.name,
             provider: email.account.provider,
-            accountId: email.account._id.toString() // Adiciona o campo accountId para o frontend
+            accountId: email.account._id.toString()
           } : null,
-          metrics: {
-            ...metrics,
-            openRate,
-            clickRate,
-            bounceRate,
-            unsubscribeRate,
-            clickToOpenRate
-          },
-          recentContacts
+          metrics: aggregatedMetrics
         };
       })
     );
     
-    // Calcular totais e médias se houver vários emails selecionados
-    let totals = null;
-    let averages = null;
-    
-    if (emailsWithMetrics.length > 1) {
-      // Inicializar contadores
-      totals = {
-        sentCount: 0,
-        deliveredCount: 0,
-        openCount: 0,
-        uniqueOpenCount: 0,
-        clickCount: 0,
-        uniqueClickCount: 0,
-        bounceCount: 0,
-        unsubscribeCount: 0
-      };
-      
-      // Somar métricas
-      emailsWithMetrics.forEach(email => {
-        Object.keys(totals).forEach(key => {
-          totals[key] += email.metrics[key] || 0;
-        });
-      });
-      
-      // Calcular médias
-      averages = {
-        openRate: totals.deliveredCount > 0 ? (totals.uniqueOpenCount / totals.deliveredCount) * 100 : 0,
-        clickRate: totals.deliveredCount > 0 ? (totals.uniqueClickCount / totals.deliveredCount) * 100 : 0,
-        bounceRate: totals.sentCount > 0 ? (totals.bounceCount / totals.sentCount) * 100 : 0,
-        unsubscribeRate: totals.deliveredCount > 0 ? (totals.unsubscribeCount / totals.deliveredCount) * 100 : 0,
-        clickToOpenRate: totals.uniqueOpenCount > 0 ? (totals.uniqueClickCount / totals.uniqueOpenCount) * 100 : 0
-      };
-    }
-    
-    // Retornar com informações de paginação
     return responseUtils.success(res, {
       emails: emailsWithMetrics,
-      totals,
-      averages,
       pagination: {
         page: parseInt(page),
-        pageSize: parseInt(limit),
-        totalItems: totalEmails,
-        totalPages: Math.ceil(totalEmails / pageSize)
+        limit: pageSize,
+        total: totalEmails,
+        pages: Math.ceil(totalEmails / pageSize)
       }
     });
   } catch (err) {
-    console.error('Erro ao obter métricas por email:', err);
     return responseUtils.serverError(res, err);
   }
 };
 
-// Método para comparar métricas entre múltiplos itens
 const compareMetrics = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -514,7 +314,6 @@ const compareMetrics = async (req, res) => {
       startDate, 
       endDate, 
       accountIds, 
-      campaignIds, 
       emailIds, 
       compareType = 'accounts' 
     } = req.query;
@@ -523,175 +322,76 @@ const compareMetrics = async (req, res) => {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
-    // Validar o tipo de comparação
-    const validCompareTypes = ['accounts', 'campaigns', 'emails'];
+    const validCompareTypes = ['accounts', 'emails'];
     if (!validCompareTypes.includes(compareType)) {
-      return responseUtils.error(res, `Tipo de comparação inválido. Use um dos seguintes: ${validCompareTypes.join(', ')}`);
+      return responseUtils.error(res, `Tipo de comparação inválido. Use: ${validCompareTypes.join(', ')}`);
     }
     
-    // Verificar se pelo menos um ID foi fornecido para comparação
-    const { accountIdArray, campaignIdArray, emailIdArray } = filterUtil.processMultipleIdsParams(req.query);
-    
-    // Verificar se há IDs para comparar com base no tipo de comparação
-    switch (compareType) {
-      case 'accounts':
-        if (!accountIdArray || accountIdArray.length < 1) {
-          return responseUtils.error(res, 'É necessário fornecer pelo menos uma conta para comparação');
-        }
-        break;
-      case 'campaigns':
-        if (!campaignIdArray || campaignIdArray.length < 1) {
-          return responseUtils.error(res, 'É necessário fornecer pelo menos uma campanha para comparação');
-        }
-        break;
-      case 'emails':
-        if (!emailIdArray || emailIdArray.length < 1) {
-          return responseUtils.error(res, 'É necessário fornecer pelo menos um email para comparação');
-        }
-        break;
-    }
-    
-    // Validar datas
     const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
     const end = endDate ? new Date(endDate) : new Date();
     
-    // Variável para armazenar os resultados da comparação
     let comparisonResults = [];
     
-    // Realizar a comparação com base no tipo selecionado
     switch (compareType) {
       case 'accounts':
-        // Verificar se as contas pertencem ao usuário
+        if (!accountIds) {
+          return responseUtils.error(res, 'É necessário fornecer pelo menos uma conta para comparação');
+        }
+        
+        const accountIdArray = accountIds.split(',').filter(id => id.trim());
         const accounts = await Account.find({ 
           _id: { $in: accountIdArray },
-          userId
+          userId 
         });
         
         if (accounts.length === 0) {
-          return responseUtils.error(res, 'Nenhuma conta válida encontrada para o usuário');
+          return responseUtils.error(res, 'Nenhuma conta válida encontrada');
         }
         
-        // Buscar eventos para cada conta no período especificado
         comparisonResults = await Promise.all(
           accounts.map(async (account) => {
-            // Filtro para eventos usando o campo correto
             const eventFilter = {
               userId,
-              account: account._id,  // Usa o campo account que é um ObjectId
+              account: account._id,
               timestamp: { $gte: start, $lte: end }
             };
             
-            // Contar eventos por tipo
             const sentCount = await Event.countDocuments({ ...eventFilter, eventType: 'send' });
-            const deliveredCount = await Event.countDocuments({ ...eventFilter, eventType: 'delivery' });
             const openCount = await Event.countDocuments({ ...eventFilter, eventType: 'open' });
+            const uniqueOpenCount = await Event.countDocuments({ ...eventFilter, eventType: 'open', isFirstInteraction: true });
             const clickCount = await Event.countDocuments({ ...eventFilter, eventType: 'click' });
+            const uniqueClickCount = await Event.countDocuments({ ...eventFilter, eventType: 'click', isFirstInteraction: true });
             const bounceCount = await Event.countDocuments({ ...eventFilter, eventType: 'bounce' });
             const unsubscribeCount = await Event.countDocuments({ ...eventFilter, eventType: 'unsubscribe' });
             
-            // Calcular taxas
-            const openRate = deliveredCount > 0 ? (openCount / deliveredCount) * 100 : 0;
-            const clickRate = deliveredCount > 0 ? (clickCount / deliveredCount) * 100 : 0;
+            const openRate = sentCount > 0 ? (openCount / sentCount) * 100 : 0;
+            const uniqueOpenRate = sentCount > 0 ? (uniqueOpenCount / sentCount) * 100 : 0;
+            const clickRate = sentCount > 0 ? (clickCount / sentCount) * 100 : 0;
+            const uniqueClickRate = sentCount > 0 ? (uniqueClickCount / sentCount) * 100 : 0;
+            const clickToOpenRate = uniqueOpenCount > 0 ? (uniqueClickCount / uniqueOpenCount) * 100 : 0;
             const bounceRate = sentCount > 0 ? (bounceCount / sentCount) * 100 : 0;
-            const unsubscribeRate = deliveredCount > 0 ? (unsubscribeCount / deliveredCount) * 100 : 0;
-            const clickToOpenRate = openCount > 0 ? (clickCount / openCount) * 100 : 0;
+            const unsubscribeRate = sentCount > 0 ? (unsubscribeCount / sentCount) * 100 : 0;
             
             return {
               id: account._id,
-              accountId: account._id.toString(), // Adiciona o accountId para o frontend
+              accountId: account._id.toString(),
               name: account.name,
               provider: account.provider,
               metrics: {
                 sentCount,
-                deliveredCount,
                 openCount,
+                uniqueOpenCount,
                 clickCount,
+                uniqueClickCount,
                 bounceCount,
                 unsubscribeCount,
                 openRate,
+                uniqueOpenRate,
                 clickRate,
+                uniqueClickRate,
+                clickToOpenRate,
                 bounceRate,
-                unsubscribeRate,
-                clickToOpenRate
-              }
-            };
-          })
-        );
-        break;
-        
-      case 'campaigns':
-        // Verificar se as campanhas existem
-        const campaigns = await Campaign.find({ 
-          _id: { $in: campaignIdArray }
-        }).populate('account', 'name provider');
-        
-        if (campaigns.length === 0) {
-          return responseUtils.error(res, 'Nenhuma campanha válida encontrada');
-        }
-        
-        // Verificar se as contas das campanhas pertencem ao usuário
-        const campaignAccountIds = campaigns.map(campaign => campaign.account._id.toString());
-        const userAccounts = await Account.find({ 
-          _id: { $in: campaignAccountIds },
-          userId 
-        });
-        
-        const validAccountIds = userAccounts.map(account => account._id.toString());
-        const validCampaigns = campaigns.filter(campaign => 
-          validAccountIds.includes(campaign.account._id.toString())
-        );
-        
-        if (validCampaigns.length === 0) {
-          return responseUtils.error(res, 'Nenhuma campanha válida pertence ao usuário');
-        }
-        
-        // Buscar eventos para cada campanha no período especificado
-        comparisonResults = await Promise.all(
-          validCampaigns.map(async (campaign) => {
-            // Filtro para eventos usando o campo correto
-            const eventFilter = {
-              userId,
-              campaign: campaign._id,  // Usa o campo campaign que é um ObjectId
-              timestamp: { $gte: start, $lte: end }
-            };
-            
-            // Contar eventos por tipo
-            const sentCount = await Event.countDocuments({ ...eventFilter, eventType: 'send' });
-            const deliveredCount = await Event.countDocuments({ ...eventFilter, eventType: 'delivery' });
-            const openCount = await Event.countDocuments({ ...eventFilter, eventType: 'open' });
-            const clickCount = await Event.countDocuments({ ...eventFilter, eventType: 'click' });
-            const bounceCount = await Event.countDocuments({ ...eventFilter, eventType: 'bounce' });
-            const unsubscribeCount = await Event.countDocuments({ ...eventFilter, eventType: 'unsubscribe' });
-            
-            // Calcular taxas
-            const openRate = deliveredCount > 0 ? (openCount / deliveredCount) * 100 : 0;
-            const clickRate = deliveredCount > 0 ? (clickCount / deliveredCount) * 100 : 0;
-            const bounceRate = sentCount > 0 ? (bounceCount / sentCount) * 100 : 0;
-            const unsubscribeRate = deliveredCount > 0 ? (unsubscribeCount / deliveredCount) * 100 : 0;
-            const clickToOpenRate = openCount > 0 ? (clickCount / openCount) * 100 : 0;
-            
-            return {
-              id: campaign._id,
-              campaignId: campaign._id.toString(), // Adiciona o campaignId para o frontend
-              name: campaign.name,
-              account: {
-                id: campaign.account._id,
-                accountId: campaign.account._id.toString(), // Adiciona o accountId para o frontend
-                name: campaign.account.name,
-                provider: campaign.account.provider
-              },
-              metrics: {
-                sentCount,
-                deliveredCount,
-                openCount,
-                clickCount,
-                bounceCount,
-                unsubscribeCount,
-                openRate,
-                clickRate,
-                bounceRate,
-                unsubscribeRate,
-                clickToOpenRate
+                unsubscribeRate
               }
             };
           })
@@ -699,71 +399,67 @@ const compareMetrics = async (req, res) => {
         break;
         
       case 'emails':
-        // Buscar os emails especificados
+        const emailIdArray = emailIds ? emailIds.split(',').filter(id => id.trim()) : [];
         const emails = await Email.find({ 
           _id: { $in: emailIdArray },
           userId
-        })
-        .populate('account', 'name provider')
-        .populate('campaign', 'name');
+        }).populate('account', 'name provider');
         
         if (emails.length === 0) {
           return responseUtils.error(res, 'Nenhum email válido encontrado para o usuário');
         }
         
-        // Buscar eventos para cada email no período especificado
         comparisonResults = await Promise.all(
           emails.map(async (email) => {
-            // Filtro para eventos usando o campo correto
             const eventFilter = {
               userId,
-              email: email._id, // Usar o campo email que é um ObjectId
+              email: email._id,
               timestamp: { $gte: start, $lte: end }
             };
             
-            // Contar eventos por tipo
             const sentCount = await Event.countDocuments({ ...eventFilter, eventType: 'send' });
-            const deliveredCount = await Event.countDocuments({ ...eventFilter, eventType: 'delivery' });
             const openCount = await Event.countDocuments({ ...eventFilter, eventType: 'open' });
+            const uniqueOpenCount = await Event.countDocuments({ ...eventFilter, eventType: 'open', isFirstInteraction: true });
             const clickCount = await Event.countDocuments({ ...eventFilter, eventType: 'click' });
+            const uniqueClickCount = await Event.countDocuments({ ...eventFilter, eventType: 'click', isFirstInteraction: true });
             const bounceCount = await Event.countDocuments({ ...eventFilter, eventType: 'bounce' });
             const unsubscribeCount = await Event.countDocuments({ ...eventFilter, eventType: 'unsubscribe' });
             
-            // Calcular taxas
-            const openRate = deliveredCount > 0 ? (openCount / deliveredCount) * 100 : 0;
-            const clickRate = deliveredCount > 0 ? (clickCount / deliveredCount) * 100 : 0;
+            const openRate = sentCount > 0 ? (openCount / sentCount) * 100 : 0;
+            const uniqueOpenRate = sentCount > 0 ? (uniqueOpenCount / sentCount) * 100 : 0;
+            const clickRate = sentCount > 0 ? (clickCount / sentCount) * 100 : 0;
+            const uniqueClickRate = sentCount > 0 ? (uniqueClickCount / sentCount) * 100 : 0;
+            const clickToOpenRate = uniqueOpenCount > 0 ? (uniqueClickCount / uniqueOpenCount) * 100 : 0;
             const bounceRate = sentCount > 0 ? (bounceCount / sentCount) * 100 : 0;
-            const unsubscribeRate = deliveredCount > 0 ? (unsubscribeCount / deliveredCount) * 100 : 0;
-            const clickToOpenRate = openCount > 0 ? (clickCount / openCount) * 100 : 0;
+            const unsubscribeRate = sentCount > 0 ? (unsubscribeCount / sentCount) * 100 : 0;
             
             return {
               id: email._id,
-              emailId: email._id.toString(), // Adiciona o emailId para o frontend
+              emailId: email._id.toString(),
               subject: email.subject,
-              sentDate: email.sentDate,
-              campaign: email.campaign ? {
-                id: email.campaign._id,
-                campaignId: email.campaign._id.toString(), // Adiciona o campaignId para o frontend
-                name: email.campaign.name
-              } : null,
+              name: email.name,
+              createdAt: email.createdAt,
               account: email.account ? {
                 id: email.account._id,
-                accountId: email.account._id.toString(), // Adiciona o accountId para o frontend
+                accountId: email.account._id.toString(),
                 name: email.account.name,
                 provider: email.account.provider
               } : null,
               metrics: {
                 sentCount,
-                deliveredCount,
                 openCount,
+                uniqueOpenCount,
                 clickCount,
+                uniqueClickCount,
                 bounceCount,
                 unsubscribeCount,
                 openRate,
+                uniqueOpenRate,
                 clickRate,
+                uniqueClickRate,
+                clickToOpenRate,
                 bounceRate,
-                unsubscribeRate,
-                clickToOpenRate
+                unsubscribeRate
               }
             };
           })
@@ -771,52 +467,13 @@ const compareMetrics = async (req, res) => {
         break;
     }
     
-    // Calcular totais e médias para comparação
-    const totals = {
-      sentCount: 0,
-      deliveredCount: 0,
-      openCount: 0,
-      clickCount: 0,
-      bounceCount: 0,
-      unsubscribeCount: 0
-    };
-    
-    // Calcular totais
-    comparisonResults.forEach(item => {
-      totals.sentCount += item.metrics.sentCount || 0;
-      totals.deliveredCount += item.metrics.deliveredCount || 0;
-      totals.openCount += item.metrics.openCount || 0;
-      totals.clickCount += item.metrics.clickCount || 0;
-      totals.bounceCount += item.metrics.bounceCount || 0;
-      totals.unsubscribeCount += item.metrics.unsubscribeCount || 0;
-    });
-    
-    // Calcular médias
-    const averages = {
-      openRate: totals.deliveredCount > 0 ? (totals.openCount / totals.deliveredCount) * 100 : 0,
-      clickRate: totals.deliveredCount > 0 ? (totals.clickCount / totals.deliveredCount) * 100 : 0,
-      bounceRate: totals.sentCount > 0 ? (totals.bounceCount / totals.sentCount) * 100 : 0,
-      unsubscribeRate: totals.deliveredCount > 0 ? (totals.unsubscribeCount / totals.deliveredCount) * 100 : 0,
-      clickToOpenRate: totals.openCount > 0 ? (totals.clickCount / totals.openCount) * 100 : 0
-    };
-    
-    // Determinar o melhor performer com base na taxa de clique e abertura
     let bestPerformer = null;
     if (comparisonResults.length > 0) {
-      // Ordenar por taxa de clique e depois por taxa de abertura
-      const sorted = [...comparisonResults].sort((a, b) => {
-        if (a.metrics.clickRate === b.metrics.clickRate) {
-          return b.metrics.openRate - a.metrics.openRate;
-        }
-        return b.metrics.clickRate - a.metrics.clickRate;
-      });
-      
+      const sorted = comparisonResults.sort((a, b) => b.metrics.openRate - a.metrics.openRate);
       bestPerformer = {
         id: sorted[0].id,
         name: sorted[0].name || sorted[0].subject,
-        // Adicionar os IDs específicos conforme o tipo de comparação
         ...(compareType === 'accounts' && { accountId: sorted[0].accountId }),
-        ...(compareType === 'campaigns' && { campaignId: sorted[0].campaignId }),
         ...(compareType === 'emails' && { emailId: sorted[0].emailId }),
         metrics: {
           openRate: sorted[0].metrics.openRate,
@@ -826,467 +483,103 @@ const compareMetrics = async (req, res) => {
       };
     }
     
-    // Preparar dados para visualização comparativa
-    const comparisonData = {
+    return responseUtils.success(res, {
       compareType,
-      dateRange: {
-        start,
-        end
-      },
-      items: comparisonResults,
-      totals,
-      averages,
+      period: { startDate: start, endDate: end },
+      results: comparisonResults,
       bestPerformer
-    };
-    
-    return responseUtils.success(res, comparisonData);
+    });
   } catch (err) {
     return responseUtils.serverError(res, err);
   }
 };
 
-// Obter emails abertos
-const getOpenedEmails = async (req, res) => {
+const getRecentEvents = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { startDate, endDate, limit = 10 } = req.query;
-    
+    const {
+      limit = 50,
+      page = 1,
+      eventTypes,
+      accountIds,
+      emailIds
+    } = req.query;
+
     if (!userId) {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
+
+    const filter = { userId };
     
-    // Validar datas
-    const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
-    const end = endDate ? new Date(endDate) : new Date();
-    
-    // Buscar eventos de abertura
-    const openEvents = await Event.find({
-      userId,
-      eventType: 'open',
-      timestamp: { $gte: start, $lte: end }
-    })
-    .sort({ timestamp: -1 })
-    .limit(parseInt(limit))
-    .populate({
-      path: 'email',
-      select: 'subject sentDate',
-      populate: {
-        path: 'campaign',
-        select: 'name'
+    if (eventTypes) {
+      const eventTypeArray = eventTypes.split(',').filter(type => type.trim());
+      if (eventTypeArray.length > 0) {
+        filter.eventType = { $in: eventTypeArray };
       }
-    });
+    }
     
-    // Formatar resultados
-    const formattedEvents = openEvents.map(event => ({
+    if (accountIds) {
+      const accountIdArray = accountIds.split(',').filter(id => id.trim());
+      if (accountIdArray.length > 0) {
+        filter.account = { $in: accountIdArray };
+      }
+    }
+    
+    if (emailIds) {
+      const emailIdArray = emailIds.split(',').filter(id => id.trim());
+      if (emailIdArray.length > 0) {
+        filter.email = { $in: emailIdArray };
+      }
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const events = await Event.find(filter)
+      .sort({ timestamp: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .populate({
+        path: 'email',
+        select: 'subject name createdAt'
+      })
+      .populate({
+        path: 'account',
+        select: 'name provider'
+      });
+
+    const formattedEvents = events.map(event => ({
       id: event._id,
+      eventType: event.eventType,
       contactEmail: event.contactEmail,
       timestamp: event.timestamp,
+      isFirstInteraction: event.isFirstInteraction,
+      url: event.url,
+      account: event.account ? {
+        id: event.account._id,
+        name: event.account.name,
+        provider: event.account.provider
+      } : null,
       email: event.email ? {
         id: event.email._id,
         subject: event.email.subject,
-        sentDate: event.email.sentDate,
-        campaign: event.email.campaign ? {
-          id: event.email.campaign._id,
-          name: event.email.campaign.name
-        } : null
+        name: event.email.name,
+        createdAt: event.email.createdAt
       } : null
     }));
-    
+
     return responseUtils.success(res, formattedEvents);
   } catch (err) {
     return responseUtils.serverError(res, err);
   }
 };
 
-// Obter data do último envio
-const getLastSendDate = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    
-    if (!userId) {
-      return responseUtils.error(res, 'User ID é obrigatório');
-    }
-    
-    // Buscar o evento de envio mais recente
-    const lastSendEvent = await Event.findOne({
-      userId,
-      eventType: 'send'
-    })
-    .sort({ timestamp: -1 });
-    
-    if (!lastSendEvent) {
-      return responseUtils.success(res, { lastSendDate: null });
-    }
-    
-    return responseUtils.success(res, { 
-      lastSendDate: lastSendEvent.timestamp 
-    });
-  } catch (err) {
-    return responseUtils.serverError(res, err);
-  }
-};
-
-// Obter taxas de métricas gerais
-const getRates = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { startDate, endDate, accountIds } = req.query;
-    
-    if (!userId) {
-      return responseUtils.error(res, 'User ID é obrigatório');
-    }
-    
-    // Validar datas
-    const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
-    const end = endDate ? new Date(endDate) : new Date();
-    
-    // Filtro base para eventos
-    let eventFilter = {
-      userId,
-      timestamp: { $gte: start, $lte: end }
-    };
-    
-    // Adicionar filtro por conta se fornecido
-    if (accountIds) {
-      const accountIdArray = accountIds.split(',');
-      if (accountIdArray.length > 0) {
-        // Verificar se as contas pertencem ao usuário
-        const accounts = await Account.find({ 
-          _id: { $in: accountIdArray },
-          userId
-        });
-        
-        const validAccountIds = accounts.map(account => account._id);
-        eventFilter.account = { $in: validAccountIds };
-      }
-    }
-    
-    // Contagens por tipo de evento
-    const sentCount = await Event.countDocuments({ ...eventFilter, eventType: 'send' });
-    const deliveredCount = await Event.countDocuments({ ...eventFilter, eventType: 'delivery' });
-    const openCount = await Event.countDocuments({ ...eventFilter, eventType: 'open' });
-    const uniqueOpeners = await Event.distinct('contactEmail', { ...eventFilter, eventType: 'open' });
-    const clickCount = await Event.countDocuments({ ...eventFilter, eventType: 'click' });
-    const uniqueClickers = await Event.distinct('contactEmail', { ...eventFilter, eventType: 'click' });
-    const bounceCount = await Event.countDocuments({ ...eventFilter, eventType: 'bounce' });
-    const unsubscribeCount = await Event.countDocuments({ ...eventFilter, eventType: 'unsubscribe' });
-    
-    // Calcular taxas
-    const deliveryRate = sentCount > 0 ? (deliveredCount / sentCount) * 100 : 0;
-    const openRate = deliveredCount > 0 ? (uniqueOpeners.length / deliveredCount) * 100 : 0;
-    const clickRate = deliveredCount > 0 ? (uniqueClickers.length / deliveredCount) * 100 : 0;
-    const bounceRate = sentCount > 0 ? (bounceCount / sentCount) * 100 : 0;
-    const unsubscribeRate = deliveredCount > 0 ? (unsubscribeCount / deliveredCount) * 100 : 0;
-    const clickToOpenRate = uniqueOpeners.length > 0 ? (uniqueClickers.length / uniqueOpeners.length) * 100 : 0;
-    
-    // Preparar resposta
-    const rates = {
-      deliveryRate,
-      openRate,
-      clickRate,
-      bounceRate,
-      unsubscribeRate,
-      clickToOpenRate,
-      counts: {
-        sent: sentCount,
-        delivered: deliveredCount,
-        opens: openCount,
-        uniqueOpens: uniqueOpeners.length,
-        clicks: clickCount,
-        uniqueClicks: uniqueClickers.length,
-        bounces: bounceCount,
-        unsubscribes: unsubscribeCount
-      }
-    };
-    
-    return responseUtils.success(res, rates);
-  } catch (err) {
-    return responseUtils.serverError(res, err);
-  }
-};
-
-// Obter taxa de envio (emails enviados por dia)
-const getSendRate = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { startDate, endDate, accountIds } = req.query;
-    
-    if (!userId) {
-      return responseUtils.error(res, 'User ID é obrigatório');
-    }
-    
-    // Validar datas
-    const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
-    const end = endDate ? new Date(endDate) : new Date();
-    
-    // Filtro base para eventos
-    let eventFilter = {
-      userId,
-      eventType: 'send',
-      timestamp: { $gte: start, $lte: end }
-    };
-    
-    // Adicionar filtro por conta se fornecido
-    if (accountIds) {
-      const accountIdArray = accountIds.split(',');
-      if (accountIdArray.length > 0) {
-        // Verificar se as contas pertencem ao usuário
-        const accounts = await Account.find({ 
-          _id: { $in: accountIdArray },
-          userId
-        });
-        
-        const validAccountIds = accounts.map(account => account._id);
-        eventFilter.account = { $in: validAccountIds };
-      }
-    }
-    
-    // Contar total de envios
-    const sentCount = await Event.countDocuments(eventFilter);
-    
-    // Calcular número de dias no intervalo
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    // Calcular taxa de envio (média por dia)
-    const sendRate = diffDays > 0 ? sentCount / diffDays : sentCount;
-    
-    return responseUtils.success(res, {
-      sendRate,
-      totalSent: sentCount,
-      days: diffDays
-    });
-  } catch (err) {
-    return responseUtils.serverError(res, err);
-  }
-};
-
-// Obter envios diários
-const getDailySends = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { startDate, endDate, accountIds } = req.query;
-    
-    if (!userId) {
-      return responseUtils.error(res, 'User ID é obrigatório');
-    }
-    
-    // Validar datas
-    const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
-    const end = endDate ? new Date(endDate) : new Date();
-    
-    // Filtro base para eventos
-    let match = {
-      userId,
-      eventType: 'send',
-      timestamp: { $gte: start, $lte: end }
-    };
-    
-    // Adicionar filtro por conta se fornecido
-    if (accountIds) {
-      const accountIdArray = accountIds.split(',');
-      if (accountIdArray.length > 0) {
-        // Verificar se as contas pertencem ao usuário
-        const accounts = await Account.find({ 
-          _id: { $in: accountIdArray },
-          userId
-        });
-        
-        const validAccountIds = accounts.map(account => account._id);
-        match.account = { $in: validAccountIds };
-      }
-    }
-    
-    // Agregar envios por dia
-    const dailySends = await Event.aggregate([
-      { $match: match },
-      {
-        $group: {
-          _id: {
-            year: { $year: "$timestamp" },
-            month: { $month: "$timestamp" },
-            day: { $dayOfMonth: "$timestamp" }
-          },
-          count: { $sum: 1 }
-        }
-      },
-      { $sort: { "_id.year": 1, "_id.month": 1, "_id.day": 1 } },
-      {
-        $project: {
-          _id: 0,
-          date: {
-            $dateFromParts: {
-              year: "$_id.year",
-              month: "$_id.month",
-              day: "$_id.day"
-            }
-          },
-          count: 1
-        }
-      }
-    ]);
-    
-    return responseUtils.success(res, dailySends);
-  } catch (err) {
-    return responseUtils.serverError(res, err);
-  }
-};
-
-// Obter aberturas diárias
-const getDailyOpens = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { startDate, endDate, accountIds } = req.query;
-    
-    if (!userId) {
-      return responseUtils.error(res, 'User ID é obrigatório');
-    }
-    
-    // Validar datas
-    const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
-    const end = endDate ? new Date(endDate) : new Date();
-    
-    // Filtro base para eventos
-    let match = {
-      userId,
-      eventType: 'open',
-      timestamp: { $gte: start, $lte: end }
-    };
-    
-    // Adicionar filtro por conta se fornecido
-    if (accountIds) {
-      const accountIdArray = accountIds.split(',');
-      if (accountIdArray.length > 0) {
-        // Verificar se as contas pertencem ao usuário
-        const accounts = await Account.find({ 
-          _id: { $in: accountIdArray },
-          userId
-        });
-        
-        const validAccountIds = accounts.map(account => account._id);
-        match.account = { $in: validAccountIds };
-      }
-    }
-    
-    // Agregar aberturas por dia
-    const dailyOpens = await Event.aggregate([
-      { $match: match },
-      {
-        $group: {
-          _id: {
-            year: { $year: "$timestamp" },
-            month: { $month: "$timestamp" },
-            day: { $dayOfMonth: "$timestamp" }
-          },
-          totalOpens: { $sum: 1 },
-          uniqueContacts: { $addToSet: "$contactEmail" }
-        }
-      },
-      { $sort: { "_id.year": 1, "_id.month": 1, "_id.day": 1 } },
-      {
-        $project: {
-          _id: 0,
-          date: {
-            $dateFromParts: {
-              year: "$_id.year",
-              month: "$_id.month",
-              day: "$_id.day"
-            }
-          },
-          totalOpens: 1,
-          uniqueOpens: { $size: "$uniqueContacts" }
-        }
-      }
-    ]);
-    
-    return responseUtils.success(res, dailyOpens);
-  } catch (err) {
-    return responseUtils.serverError(res, err);
-  }
-};
-
-// Obter cliques diários
-const getDailyClicks = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { startDate, endDate, accountIds } = req.query;
-    
-    if (!userId) {
-      return responseUtils.error(res, 'User ID é obrigatório');
-    }
-    
-    // Validar datas
-    const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
-    const end = endDate ? new Date(endDate) : new Date();
-    
-    // Filtro base para eventos
-    let match = {
-      userId,
-      eventType: 'click',
-      timestamp: { $gte: start, $lte: end }
-    };
-    
-    // Adicionar filtro por conta se fornecido
-    if (accountIds) {
-      const accountIdArray = accountIds.split(',');
-      if (accountIdArray.length > 0) {
-        // Verificar se as contas pertencem ao usuário
-        const accounts = await Account.find({ 
-          _id: { $in: accountIdArray },
-          userId
-        });
-        
-        const validAccountIds = accounts.map(account => account._id);
-        match.account = { $in: validAccountIds };
-      }
-    }
-    
-    // Agregar cliques por dia
-    const dailyClicks = await Event.aggregate([
-      { $match: match },
-      {
-        $group: {
-          _id: {
-            year: { $year: "$timestamp" },
-            month: { $month: "$timestamp" },
-            day: { $dayOfMonth: "$timestamp" }
-          },
-          totalClicks: { $sum: 1 },
-          uniqueContacts: { $addToSet: "$contactEmail" }
-        }
-      },
-      { $sort: { "_id.year": 1, "_id.month": 1, "_id.day": 1 } },
-      {
-        $project: {
-          _id: 0,
-          date: {
-            $dateFromParts: {
-              year: "$_id.year",
-              month: "$_id.month",
-              day: "$_id.day"
-            }
-          },
-          totalClicks: 1,
-          uniqueClicks: { $size: "$uniqueContacts" }
-        }
-      }
-    ]);
-    
-    return responseUtils.success(res, dailyClicks);
-  } catch (err) {
-    return responseUtils.serverError(res, err);
-  }
-};
-
-// Obter eventos com filtragem
-const getEvents = async (req, res) => {
+const getDetailedEvents = async (req, res) => {
   try {
     const { userId } = req.params;
     const { 
       startDate, 
       endDate, 
       accountIds, 
-      campaignIds, 
       emailIds, 
       eventTypes,
       contactEmail,
@@ -1298,28 +591,18 @@ const getEvents = async (req, res) => {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
-    // Validar datas
-    const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
+    const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 7);
     const end = endDate ? new Date(endDate) : new Date();
     
-    // Construir filtro para eventos
     const eventFilter = {
       userId,
       timestamp: { $gte: start, $lte: end }
     };
     
-    // Processar filtros de múltiplos IDs
     if (accountIds) {
       const accountIdArray = accountIds.split(',').filter(id => id.trim());
       if (accountIdArray.length > 0) {
         eventFilter.account = { $in: accountIdArray };
-      }
-    }
-    
-    if (campaignIds) {
-      const campaignIdArray = campaignIds.split(',').filter(id => id.trim());
-      if (campaignIdArray.length > 0) {
-        eventFilter.campaign = { $in: campaignIdArray };
       }
     }
     
@@ -1330,71 +613,69 @@ const getEvents = async (req, res) => {
       }
     }
     
-    // Filtrar por tipo de evento
     if (eventTypes) {
-      const validEventTypes = ['send', 'delivery', 'open', 'click', 'bounce', 'unsubscribe'];
-      const eventTypeArray = eventTypes.split(',')
-        .filter(type => type.trim() && validEventTypes.includes(type.trim()));
-      
+      const eventTypeArray = eventTypes.split(',').filter(type => type.trim());
       if (eventTypeArray.length > 0) {
         eventFilter.eventType = { $in: eventTypeArray };
       }
     }
     
-    // Filtrar por email de contato
     if (contactEmail) {
-      eventFilter.contactEmail = contactEmail;
+      eventFilter.contactEmail = { $regex: contactEmail, $options: 'i' };
     }
     
-    // Definir paginação
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const pageSize = parseInt(limit);
     
-    // Buscar eventos com paginação e informações relacionadas
     const events = await Event.find(eventFilter)
       .populate('account', 'name provider')
-      .populate('campaign', 'name')
-      .populate('email', 'subject sentDate')
+      .populate('email', 'subject name createdAt')
       .sort({ timestamp: -1 })
       .skip(skip)
       .limit(pageSize);
     
-    // Contar total para paginação
     const totalEvents = await Event.countDocuments(eventFilter);
     
-    // Formatar eventos para resposta
     const formattedEvents = events.map(event => ({
       id: event._id,
       eventType: event.eventType,
       timestamp: event.timestamp,
       contactEmail: event.contactEmail,
+      contactId: event.contactId,
+      isFirstInteraction: event.isFirstInteraction,
+      url: event.url,
+      bounceType: event.bounceType,
+      bounceReason: event.bounceReason,
       ipAddress: event.ipAddress,
       userAgent: event.userAgent,
-      url: event.url,
       account: event.account ? {
         id: event.account._id,
         name: event.account.name,
         provider: event.account.provider
       } : null,
-      campaign: event.campaign ? {
-        id: event.campaign._id,
-        name: event.campaign.name
-      } : null,
       email: event.email ? {
         id: event.email._id,
         subject: event.email.subject,
-        sentDate: event.email.sentDate
+        name: event.email.name,
+        createdAt: event.email.createdAt
       } : null
     }));
     
-    // Retornar com informações de paginação
     return responseUtils.success(res, {
       events: formattedEvents,
       pagination: {
         page: parseInt(page),
-        pageSize: parseInt(limit),
-        totalItems: totalEvents,
-        totalPages: Math.ceil(totalEvents / pageSize)
+        limit: pageSize,
+        total: totalEvents,
+        pages: Math.ceil(totalEvents / pageSize)
+      },
+      filters: {
+        startDate: start,
+        endDate: end,
+        accountIds,
+        emailIds,
+        eventTypes,
+        contactEmail
       }
     });
   } catch (err) {
@@ -1404,16 +685,9 @@ const getEvents = async (req, res) => {
 
 module.exports = {
   getMetricsByDate,
-  getMetricsByAccount,
-  getMetricsByCampaign,
+  getMetricsByAccount, 
   getMetricsByEmail,
-  getOpenedEmails,
-  getLastSendDate,
-  getRates,
-  getSendRate,
-  getDailySends,
-  getDailyOpens,
-  getDailyClicks,
-  getEvents,
-  compareMetrics
+  compareMetrics,
+  getRecentEvents,
+  getDetailedEvents
 };
