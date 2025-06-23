@@ -127,22 +127,12 @@ accountSchema.methods.getMauticEmails = async function() {
     const response = await axios.get(apiUrl, axiosConfig);
     
     if (response.status === 200) {
-      if (!this.isConnected) {
-        this.isConnected = true;
-        this.lastSync = new Date();
-        await this.save();
-      }
-      
       return { 
         success: true, 
         emails: response.data.emails || [],
         total: response.data.total || 0
       };
     } else {
-      if (this.isConnected) {
-        this.isConnected = false;
-        await this.save();
-      }
       return { success: false, message: `Falha ao buscar emails: Código ${response.status}` };
     }
   } catch (error) {
@@ -155,11 +145,6 @@ accountSchema.methods.getMauticEmails = async function() {
       errorMessage = 'Falha na conexão: servidor não responde';
     } else {
       errorMessage = error.message || 'Erro desconhecido ao buscar emails';
-    }
-    
-    if (this.isConnected) {
-      this.isConnected = false;
-      await this.save();
     }
     
     return { success: false, message: errorMessage, emails: [] };
@@ -196,21 +181,11 @@ accountSchema.methods.getMauticLeadsByDate = async function(startDate, endDate) 
     const response = await axios.get(apiUrl, axiosConfig);
     
     if (response.status === 200) {
-      if (!this.isConnected) {
-        this.isConnected = true;
-        this.lastSync = new Date();
-        await this.save();
-      }
-      
       return { 
         success: true, 
         total: parseInt(response.data.total || 0)
       };
     } else {
-      if (this.isConnected) {
-        this.isConnected = false;
-        await this.save();
-      }
       return { success: false, message: `Falha ao buscar leads: Código ${response.status}` };
     }
   } catch (error) {
@@ -223,11 +198,6 @@ accountSchema.methods.getMauticLeadsByDate = async function(startDate, endDate) 
       errorMessage = 'Falha na conexão: servidor não responde';
     } else {
       errorMessage = error.message || 'Erro desconhecido ao buscar leads';
-    }
-    
-    if (this.isConnected) {
-      this.isConnected = false;
-      await this.save();
     }
     
     return { success: false, message: errorMessage, total: 0 };

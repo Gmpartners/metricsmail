@@ -1,5 +1,63 @@
 const { Account, Email, Event } = require('../models');
+const LeadStats = require('../models/leadStatsModel');
 const responseUtils = require('../utils/responseUtil');
+
+const getBrasilDate = (date) => {
+  const d = new Date(date);
+  d.setHours(d.getHours() - 3);
+  return d;
+};
+
+const formatDate = (date) => {
+  const d = getBrasilDate(date);
+  return d.toISOString().split('T')[0];
+};
+
+const collectInitialData = async (accountId, daysBack = 7) => {
+  try {
+    console.log(`Iniciando coleta histórica para conta ${accountId} - ${daysBack} dias`);
+    
+    const account = await Account.findById(accountId);
+    if (!account) return;
+    
+    for (let i = 0; i < daysBack; i++) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = formatDate(date);
+      
+      try {
+        const startDate = `${dateStr} 00:00:00`;
+        const endDate = `${dateStr} 23:59:59`;
+        
+        const result = await account.getMauticLeadsByDate(startDate, endDate);
+        
+        if (result.success) {
+          await LeadStats.findOneAndUpdate(
+            { userId: account.userId, accountId: account._id.toString(), date: dateStr },
+            { count: result.total, lastUpdated: new Date() },
+            { upsert: true, new: true }
+          );
+          
+          console.log(`✅ ${dateStr}: ${result.total} leads coletados`);
+        } else {
+          console.log(`❌ ${dateStr}: Falha - ${result.message}`);
+        }
+        
+        if (i < daysBack - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+        
+      } catch (error) {
+        console.error(`Erro coletando dados de ${dateStr}:`, error.message);
+      }
+    }
+    
+    console.log(`Coleta histórica concluída para conta ${account.name}`);
+    
+  } catch (error) {
+    console.error('Erro na coleta inicial:', error.message);
+  }
+};
 
 const listAccounts = async (req, res) => {
   try {
@@ -296,7 +354,21 @@ const createAccount = async (req, res) => {
       }
     });
     
-    return responseUtils.success(res, newAccount);
+    const response = responseUtils.success(res, newAccount);
+    
+    process.nextTick(async () => {
+      try {
+        const testResult = await newAccount.getMauticEmails();
+        if (testResult.success) {
+          console.log(`🚀 Conta ${newAccount.name} conectada - iniciando coleta de 7 dias...`);
+          await collectInitialData(newAccount._id, 7);
+        }
+      } catch (err) {
+        console.log(`❌ Falha na coleta inicial: ${err.message}`);
+      }
+    });
+    
+    return response;
   } catch (err) {
     return responseUtils.serverError(res, err);
   }
@@ -339,7 +411,23 @@ const updateAccount = async (req, res) => {
       { new: true, runValidators: true }
     );
     
-    return responseUtils.success(res, updatedAccount);
+    const response = responseUtils.success(res, updatedAccount);
+    
+    if (username || password || url) {
+      process.nextTick(async () => {
+        try {
+          const testResult = await updatedAccount.getMauticEmails();
+          if (testResult.success) {
+            console.log(`🔄 Conta ${updatedAccount.name} reconectada - coletando dados recentes...`);
+            await collectInitialData(updatedAccount._id, 3);
+          }
+        } catch (err) {
+          console.log(`❌ Falha no teste pós-atualização: ${err.message}`);
+        }
+      });
+    }
+    
+    return response;
   } catch (err) {
     return responseUtils.serverError(res, err);
   }
@@ -588,6 +676,56 @@ const getMauticEmailDetails = async (req, res) => {
   }
 };
 
+const testConnection = async (req, res) => {
+  try {
+    const { userId, accountId } = req.params;
+    
+    if (!userId || !accountId) {
+      return responseUtils.error(res, 'User ID e Account ID são obrigatórios');
+    }
+    
+    const account = await Account.findOne({
+      _id: accountId,
+      userId
+    });
+    
+    if (!account) {
+      return responseUtils.notFound(res, 'Conta não encontrada');
+    }
+    
+    const testResult = await account.getMauticEmails();
+    
+    const response = responseUtils.success(res, {
+      connected: testResult.success,
+      message: testResult.success ? 'Conexão estabelecida com sucesso' : testResult.message,
+      account: {
+        id: account._id,
+        name: account.name,
+        isConnected: account.isConnected,
+        lastSync: account.lastSync
+      },
+      details: testResult.success ? {
+        emailsFound: testResult.total || 0
+      } : null
+    });
+    
+    if (testResult.success) {
+      process.nextTick(async () => {
+        try {
+          console.log(`🔄 Teste de conexão bem-sucedido - coletando últimos 3 dias para ${account.name}...`);
+          await collectInitialData(account._id, 3);
+        } catch (err) {
+          console.log(`❌ Falha na coleta pós-teste: ${err.message}`);
+        }
+      });
+    }
+    
+    return response;
+  } catch (err) {
+    return responseUtils.serverError(res, err);
+  }
+};
+
 module.exports = {
   listAccounts,
   getAccountDetails,
@@ -597,5 +735,6 @@ module.exports = {
   deleteAccount,
   getAccountWebhook,
   getMauticEmails,
-  getMauticEmailDetails
+  getMauticEmailDetails,
+  testConnection
 };
