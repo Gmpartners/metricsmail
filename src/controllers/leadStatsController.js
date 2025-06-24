@@ -138,6 +138,8 @@ const getLeadStats = async (req, res) => {
     const formattedStartDate = formatDate(start);
     const formattedEndDate = formatDate(end);
     const today = formatDate(new Date());
+    const yesterday = formatDate(new Date(Date.now() - 24 * 60 * 60 * 1000));
+    const twoDaysAgo = formatDate(new Date(Date.now() - 48 * 60 * 60 * 1000));
     
     const historicalStats = await LeadStats.find({
       userId,
@@ -145,7 +147,7 @@ const getLeadStats = async (req, res) => {
       date: { 
         $gte: formattedStartDate,
         $lte: formattedEndDate,
-        $ne: today
+        $nin: [today, yesterday, twoDaysAgo]
       }
     }).sort({ date: 1 });
     
@@ -165,23 +167,48 @@ const getLeadStats = async (req, res) => {
       }
     });
     
-    if (formattedStartDate <= today && today <= formattedEndDate) {
-      const todayPromises = accountIdArray.map(async (accountId) => {
-        const todayStats = await getTodayLeadStats(accountId);
-        if (todayStats.success && statsByAccount[accountId]) {
-          statsByAccount[accountId].push({
-            date: today,
-            count: todayStats.count,
-            isRealTime: true
-          });
+    const recentDates = [twoDaysAgo, yesterday, today].filter(date => 
+      date >= formattedStartDate && date <= formattedEndDate
+    );
+
+    for (const date of recentDates) {
+      const datePromises = accountIdArray.map(async (accountId) => {
+        try {
+          const account = await Account.findById(accountId);
+          if (!account || account.status !== 'active') return;
+          
+          const startDate = `${date} 00:00:00`;
+          const endDate = `${date} 23:59:59`;
+          
+          const result = await account.getMauticLeadsByDate(startDate, endDate);
+          
+          if (result.success) {
+            await LeadStats.findOneAndUpdate(
+              { userId, accountId, date },
+              { count: result.total, lastUpdated: new Date() },
+              { upsert: true }
+            );
+            
+            if (statsByAccount[accountId]) {
+              statsByAccount[accountId] = statsByAccount[accountId].filter(
+                item => item.date !== date
+              );
+              
+              statsByAccount[accountId].push({
+                date: date,
+                count: result.total,
+                isRealTime: true
+              });
+            }
+          }
+        } catch (error) {
+          console.error(`Erro ao buscar dados em tempo real para ${date}:`, error.message);
         }
-        return todayStats;
       });
       
-      await Promise.all(todayPromises);
+      await Promise.all(datePromises);
     }
     
-    // Preencher dias faltantes para cada conta
     Object.keys(statsByAccount).forEach(accountId => {
       statsByAccount[accountId] = fillMissingDates(
         statsByAccount[accountId], 

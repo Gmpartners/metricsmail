@@ -25,7 +25,6 @@ const getMetricsByDate = async (req, res) => {
       return responseUtils.error(res, 'O parâmetro groupBy deve ser day, week, month ou year');
     }
     
-    // NOVA LÓGICA: Calcular diretamente dos Events
     let accountFilter = { userId };
     if (accountIds) {
       const accountIdArray = accountIds.split(',').filter(id => id.trim());
@@ -40,9 +39,9 @@ const getMetricsByDate = async (req, res) => {
       return responseUtils.error(res, 'Nenhuma conta válida encontrada para o usuário');
     }
     
-    // Gerar dados dia por dia
     const metrics = [];
     const currentDate = new Date(start);
+    const today = new Date();
     
     while (currentDate <= end) {
       const dayStart = new Date(currentDate);
@@ -50,6 +49,9 @@ const getMetricsByDate = async (req, res) => {
       
       const dayEnd = new Date(currentDate);
       dayEnd.setHours(23, 59, 59, 999);
+      
+      const daysDiff = Math.floor((today - currentDate) / (1000 * 60 * 60 * 24));
+      const isRealTime = daysDiff <= 2;
       
       for (const account of accounts) {
         const eventFilter = {
@@ -65,7 +67,6 @@ const getMetricsByDate = async (req, res) => {
           }
         }
         
-        // Contar eventos por tipo
         const sentCount = await Event.countDocuments({ ...eventFilter, eventType: 'send' });
         const openCount = await Event.countDocuments({ ...eventFilter, eventType: 'open' });
         const uniqueOpenCount = await Event.countDocuments({ ...eventFilter, eventType: 'open', isFirstInteraction: true });
@@ -74,7 +75,6 @@ const getMetricsByDate = async (req, res) => {
         const bounceCount = await Event.countDocuments({ ...eventFilter, eventType: 'bounce' });
         const unsubscribeCount = await Event.countDocuments({ ...eventFilter, eventType: 'unsubscribe' });
         
-        // Calcular taxas
         const openRate = sentCount > 0 ? (openCount / sentCount) * 100 : 0;
         const uniqueOpenRate = sentCount > 0 ? (uniqueOpenCount / sentCount) * 100 : 0;
         const clickRate = sentCount > 0 ? (clickCount / sentCount) * 100 : 0;
@@ -83,7 +83,6 @@ const getMetricsByDate = async (req, res) => {
         const bounceRate = sentCount > 0 ? (bounceCount / sentCount) * 100 : 0;
         const unsubscribeRate = sentCount > 0 ? (unsubscribeCount / sentCount) * 100 : 0;
         
-        // Só adicionar se houver algum evento no dia
         if (sentCount > 0 || openCount > 0 || clickCount > 0) {
           metrics.push({
             date: dayStart.toISOString().split('T')[0],
@@ -93,6 +92,7 @@ const getMetricsByDate = async (req, res) => {
               provider: account.provider
             },
             period: groupBy,
+            isRealTime: isRealTime,
             metrics: {
               sentCount,
               openCount,
