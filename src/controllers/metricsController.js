@@ -25,40 +25,96 @@ const getMetricsByDate = async (req, res) => {
       return responseUtils.error(res, 'O parâmetro groupBy deve ser day, week, month ou year');
     }
     
-    const filter = {
-      date: { $gte: start, $lte: end },
-      period: groupBy,
-      userId
-    };
-    
+    // NOVA LÓGICA: Calcular diretamente dos Events
+    let accountFilter = { userId };
     if (accountIds) {
-      const accountIdArray = accountIds.split(',');
+      const accountIdArray = accountIds.split(',').filter(id => id.trim());
       if (accountIdArray.length > 0) {
-        const accounts = await Account.find({ 
-          _id: { $in: accountIdArray },
-          userId 
-        });
+        accountFilter._id = { $in: accountIdArray };
+      }
+    }
+    
+    const accounts = await Account.find(accountFilter);
+    
+    if (accounts.length === 0) {
+      return responseUtils.error(res, 'Nenhuma conta válida encontrada para o usuário');
+    }
+    
+    // Gerar dados dia por dia
+    const metrics = [];
+    const currentDate = new Date(start);
+    
+    while (currentDate <= end) {
+      const dayStart = new Date(currentDate);
+      dayStart.setHours(0, 0, 0, 0);
+      
+      const dayEnd = new Date(currentDate);
+      dayEnd.setHours(23, 59, 59, 999);
+      
+      for (const account of accounts) {
+        const eventFilter = {
+          userId,
+          account: account._id,
+          timestamp: { $gte: dayStart, $lte: dayEnd }
+        };
         
-        if (accounts.length === 0) {
-          return responseUtils.error(res, 'Nenhuma conta válida encontrada para o usuário');
+        if (emailIds) {
+          const emailIdArray = emailIds.split(',').filter(id => id.trim());
+          if (emailIdArray.length > 0) {
+            eventFilter.email = { $in: emailIdArray };
+          }
         }
         
-        const validAccountIds = accounts.map(account => account._id);
-        filter.account = { $in: validAccountIds };
+        // Contar eventos por tipo
+        const sentCount = await Event.countDocuments({ ...eventFilter, eventType: 'send' });
+        const openCount = await Event.countDocuments({ ...eventFilter, eventType: 'open' });
+        const uniqueOpenCount = await Event.countDocuments({ ...eventFilter, eventType: 'open', isFirstInteraction: true });
+        const clickCount = await Event.countDocuments({ ...eventFilter, eventType: 'click' });
+        const uniqueClickCount = await Event.countDocuments({ ...eventFilter, eventType: 'click', isFirstInteraction: true });
+        const bounceCount = await Event.countDocuments({ ...eventFilter, eventType: 'bounce' });
+        const unsubscribeCount = await Event.countDocuments({ ...eventFilter, eventType: 'unsubscribe' });
+        
+        // Calcular taxas
+        const openRate = sentCount > 0 ? (openCount / sentCount) * 100 : 0;
+        const uniqueOpenRate = sentCount > 0 ? (uniqueOpenCount / sentCount) * 100 : 0;
+        const clickRate = sentCount > 0 ? (clickCount / sentCount) * 100 : 0;
+        const uniqueClickRate = sentCount > 0 ? (uniqueClickCount / sentCount) * 100 : 0;
+        const clickToOpenRate = uniqueOpenCount > 0 ? (uniqueClickCount / uniqueOpenCount) * 100 : 0;
+        const bounceRate = sentCount > 0 ? (bounceCount / sentCount) * 100 : 0;
+        const unsubscribeRate = sentCount > 0 ? (unsubscribeCount / sentCount) * 100 : 0;
+        
+        // Só adicionar se houver algum evento no dia
+        if (sentCount > 0 || openCount > 0 || clickCount > 0) {
+          metrics.push({
+            date: dayStart.toISOString().split('T')[0],
+            account: {
+              _id: account._id,
+              name: account.name,
+              provider: account.provider
+            },
+            period: groupBy,
+            metrics: {
+              sentCount,
+              openCount,
+              uniqueOpenCount,
+              clickCount,
+              uniqueClickCount,
+              bounceCount,
+              unsubscribeCount,
+              openRate,
+              uniqueOpenRate,
+              clickRate,
+              uniqueClickRate,
+              clickToOpenRate,
+              bounceRate,
+              unsubscribeRate
+            }
+          });
+        }
       }
+      
+      currentDate.setDate(currentDate.getDate() + 1);
     }
-    
-    if (emailIds) {
-      const emailIdArray = emailIds.split(',');
-      if (emailIdArray.length > 0) {
-        filter.email = { $in: emailIdArray };
-      }
-    }
-    
-    const metrics = await Metrics.find(filter)
-      .sort({ date: 1 })
-      .populate('account', 'name provider')
-      .populate('email', 'name subject');
     
     return responseUtils.success(res, metrics);
   } catch (err) {
@@ -324,7 +380,7 @@ const compareMetrics = async (req, res) => {
     
     const validCompareTypes = ['accounts', 'emails'];
     if (!validCompareTypes.includes(compareType)) {
-      return responseUtils.error(res, `Tipo de comparação inválido. Use: ${validCompareTypes.join(', ')}`);
+      return responseUtils.error(res, );
     }
     
     const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
@@ -691,3 +747,4 @@ module.exports = {
   getRecentEvents,
   getDetailedEvents
 };
+
