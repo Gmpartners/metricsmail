@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MailNumbers Cache - Instruções de Instalação</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .step {
+            background: #f5f5f5;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border-left: 4px solid #7c3aed;
+        }
+        .code {
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        .bookmarklet {
+            background: #e7f3ff;
+            padding: 15px;
+            border: 2px solid #007acc;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+        .bookmarklet a {
+            background: #7c3aed;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            display: inline-block;
+            margin: 10px 0;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🗄️ MailNumbers Cache - Sistema de Filtros Persistentes</h1>
+    
+    <p>Este sistema vai salvar automaticamente a conta que você seleciona no dashboard e restaurar quando você navegar entre as páginas.</p>
+
+    <div class="step">
+        <h2>🚀 Opção 1: Bookmarklet (Mais Fácil)</h2>
+        <p>Arraste o botão abaixo para sua barra de favoritos e clique nele sempre que entrar no dashboard:</p>
+        
+        <div class="bookmarklet">
+            <a href="javascript:(function(){if(window.MailNumbersCache){alert('Cache já carregado!');return;}var s=document.createElement('script');s.innerHTML='(function(){const CACHE_KEY=\"mailnumbers_selected_account\";const ACCOUNT_SELECTORS=[\"select[name*=conta]\",\"select[name*=account]\",\"select:has(option[value*=ZA])\",\".account-select\",\"#account-select\",\"[data-testid*=account]\",\"select:has(option:contains(Selecione))\"];function saveAccount(accountId,accountName){try{const data={id:accountId,name:accountName,timestamp:Date.now()};localStorage.setItem(CACHE_KEY,JSON.stringify(data));console.log(\"✅ Conta salva:\",accountName);}catch(e){console.error(\"❌ Erro ao salvar conta:\",e);}}function getSavedAccount(){try{const saved=localStorage.getItem(CACHE_KEY);if(!saved)return null;const data=JSON.parse(saved);const maxAge=7*24*60*60*1000;if(Date.now()-data.timestamp>maxAge){localStorage.removeItem(CACHE_KEY);return null;}return data;}catch(e){return null;}}function findAccountSelect(){for(const selector of ACCOUNT_SELECTORS){const element=document.querySelector(selector);if(element)return element;}return null;}function restoreAccount(){const saved=getSavedAccount();if(!saved)return false;const accountSelect=findAccountSelect();if(!accountSelect)return false;const options=Array.from(accountSelect.options||accountSelect.querySelectorAll(\"option\"));const targetOption=options.find(option=>option.value===saved.id||option.textContent.trim()===saved.name||option.textContent.includes(saved.name));if(targetOption){accountSelect.value=targetOption.value;const events=[\"change\",\"input\",\"blur\"];events.forEach(eventType=>{accountSelect.dispatchEvent(new Event(eventType,{bubbles:true,cancelable:true}));});if(window.React){const nativeInputValueSetter=Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype,\"value\").set;nativeInputValueSetter.call(accountSelect,targetOption.value);const event=new Event(\"input\",{bubbles:true});accountSelect.dispatchEvent(event);}console.log(\"🔄 Conta restaurada:\",saved.name);return true;}return false;}function setupAutoSave(){const accountSelect=findAccountSelect();if(!accountSelect)return;const saveCurrentSelection=()=>{const selectedOption=accountSelect.selectedOptions[0];if(selectedOption&&selectedOption.value&&selectedOption.value!==\"\"&&!selectedOption.textContent.includes(\"Selecione\")){saveAccount(selectedOption.value,selectedOption.textContent.trim());}};const observer=new MutationObserver(()=>{saveCurrentSelection();});observer.observe(accountSelect,{attributes:true,attributeFilter:[\"value\"]});accountSelect.addEventListener(\"change\",saveCurrentSelection);accountSelect.addEventListener(\"input\",saveCurrentSelection);}function init(){let attempts=0;const maxAttempts=20;const tryRestore=()=>{attempts++;if(restoreAccount()){setupAutoSave();return;}if(attempts<maxAttempts){setTimeout(tryRestore,500);}};tryRestore();if(document.readyState===\"loading\"){document.addEventListener(\"DOMContentLoaded\",tryRestore);}window.addEventListener(\"load\",tryRestore);let currentUrl=window.location.href;const urlObserver=new MutationObserver(()=>{if(window.location.href!==currentUrl){currentUrl=window.location.href;setTimeout(tryRestore,1000);}});urlObserver.observe(document.body,{childList:true,subtree:true});}window.MailNumbersCache={save:saveAccount,restore:restoreAccount,get:getSavedAccount,clear:()=>localStorage.removeItem(CACHE_KEY)};if(document.readyState===\"loading\"){document.addEventListener(\"DOMContentLoaded\",init);}else{init();}})();';document.head.appendChild(s);alert('✅ Cache ativado! A conta selecionada será lembrada.');})();">🗄️ Ativar Cache</a>
+            
+            <p><strong>Como usar:</strong> Arraste este botão para a barra de favoritos do seu navegador. Depois, sempre que entrar no dashboard, clique no favorito para ativar o cache.</p>
+        </div>
+    </div>
+
+    <div class="step">
+        <h2>⚙️ Opção 2: Adicionar ao Código do Site</h2>
+        <p>Se você tem acesso ao código do seu dashboard, adicione este script:</p>
+        
+        <div class="code">
+&lt;script src="mailnumbers-cache.js"&gt;&lt;/script&gt;
+        </div>
+        
+        <p>Ou adicione diretamente no HTML:</p>
+        
+        <div class="code">
+&lt;script&gt;
+// Cole aqui o conteúdo do arquivo mailnumbers-cache.js
+&lt;/script&gt;
+        </div>
+    </div>
+
+    <div class="step">
+        <h2>🛠️ Opção 3: Console do Navegador</h2>
+        <p>Abra o console do navegador (F12) e cole este código:</p>
+        
+        <div class="code">
+// Criar script
+var script = document.createElement('script');
+script.src = 'https://seu-servidor.com/mailnumbers-cache.js';
+document.head.appendChild(script);
+        </div>
+    </div>
+
+    <div class="warning">
+        <h3>⚠️ Como Funciona:</h3>
+        <ul>
+            <li>Salva automaticamente a conta que você seleciona</li>
+            <li>Restaura a conta quando você navega entre páginas</li>
+            <li>Funciona com React, Vue, Angular e outros frameworks</li>
+            <li>Os dados ficam salvos por 7 dias no seu navegador</li>
+        </ul>
+    </div>
+
+    <div class="step">
+        <h2>🔧 Comandos Manuais</h2>
+        <p>Depois de ativar, você pode usar estes comandos no console:</p>
+        
+        <div class="code">
+// Salvar conta manualmente
+MailNumbersCache.save("ZA1", "ZA 1");
+
+// Restaurar conta
+MailNumbersCache.restore();
+
+// Ver conta salva
+MailNumbersCache.get();
+
+// Limpar cache
+MailNumbersCache.clear();
+        </div>
+    </div>
+
+    <div class="step">
+        <h2>🐛 Solução de Problemas</h2>
+        <ul>
+            <li><strong>Não funciona:</strong> Tente recarregar a página e ativar novamente</li>
+            <li><strong>Conta não restaura:</strong> Verifique se o seletor de conta está visível na tela</li>
+            <li><strong>Framework React:</strong> O script detecta automaticamente e usa eventos compatíveis</li>
+            <li><strong>Limpar tudo:</strong> Use <code>MailNumbersCache.clear()</code> no console</li>
+        </ul>
+    </div>
+</body>
+</html>
