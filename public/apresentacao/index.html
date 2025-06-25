@@ -38,7 +38,7 @@
         <div class="filters-container">
             <div class="filter-group">
                 <label for="campaign-name">Nome da campanha</label>
-                <select id="campaign-name">
+                <select id="campaign-name" onchange="onFilterChange(this)">
                     <option value="all" selected>Todos</option>
                     <option value="email-01">email-01</option>
                     <option value="email-02">email-02</option>
@@ -47,7 +47,7 @@
             </div>
             <div class="filter-group">
                 <label for="campaign-type">Tipo de campanha</label>
-                <select id="campaign-type">
+                <select id="campaign-type" onchange="onFilterChange(this)">
                     <option value="all" selected>Todos</option>
                     <option value="marketing">Marketing</option>
                     <option value="transactional">Transacional</option>
@@ -67,8 +67,8 @@
             <div class="filter-group">
                 <label>Período</label>
                 <div class="date-inputs">
-                    <input type="date" id="start-date" value="2025-05-01">
-                    <input type="date" id="end-date" value="2025-05-07">
+                    <input type="date" id="start-date" value="2025-05-01" onchange="onFilterChange(this)">
+                    <input type="date" id="end-date" value="2025-05-07" onchange="onFilterChange(this)">
                 </div>
             </div>
             <div class="filter-group" style="justify-content: flex-end;">

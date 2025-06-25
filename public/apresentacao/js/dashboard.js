@@ -1,6 +1,66 @@
-// Dashboard de Métricas de Email Marketing
+class DashboardCache {
+    constructor() {
+        this.CACHE_KEY = 'metricsmail_dashboard_filters';
+        this.DEFAULT_FILTERS = {
+            selectedAccount: null,
+            startDate: '2025-05-01',
+            endDate: '2025-05-07',
+            campaignName: 'all',
+            campaignType: 'all',
+            dateRange: '7'
+        };
+    }
 
-// Dados simulados para o período de 01/05/2025 a 07/05/2025
+    saveFilters(filters) {
+        try {
+            const cacheData = {
+                filters: { ...this.DEFAULT_FILTERS, ...filters },
+                timestamp: Date.now()
+            };
+            localStorage.setItem(this.CACHE_KEY, JSON.stringify(cacheData));
+        } catch (error) {
+            console.error('Erro ao salvar filtros:', error);
+        }
+    }
+
+    getFilters() {
+        try {
+            const cached = localStorage.getItem(this.CACHE_KEY);
+            if (!cached) return this.DEFAULT_FILTERS;
+
+            const cacheData = JSON.parse(cached);
+            const cacheAge = Date.now() - cacheData.timestamp;
+            const maxAge = 24 * 60 * 60 * 1000;
+            
+            if (cacheAge > maxAge) {
+                this.clearCache();
+                return this.DEFAULT_FILTERS;
+            }
+
+            return { ...this.DEFAULT_FILTERS, ...cacheData.filters };
+        } catch (error) {
+            return this.DEFAULT_FILTERS;
+        }
+    }
+
+    updateFilter(key, value) {
+        const currentFilters = this.getFilters();
+        const updatedFilters = { ...currentFilters, [key]: value };
+        this.saveFilters(updatedFilters);
+        return updatedFilters;
+    }
+
+    clearCache() {
+        try {
+            localStorage.removeItem(this.CACHE_KEY);
+        } catch (error) {
+            console.error('Erro ao limpar cache:', error);
+        }
+    }
+}
+
+const dashboardCache = new DashboardCache();
+
 const campaignsData = [
     {
         name: 'email-01-bloco-06-06-FA-GN-ZA-02-07-24',
@@ -228,35 +288,40 @@ const campaignsData = [
     }
 ];
 
-// Configuração de datas iniciais
 document.addEventListener('DOMContentLoaded', () => {
-    // Definir as datas padrão (01/05/2025 a 07/05/2025)
-    document.getElementById('start-date').value = '2025-05-01';
-    document.getElementById('end-date').value = '2025-05-07';
+    const savedFilters = dashboardCache.getFilters();
     
-    // Simular uma pequena demora
+    document.getElementById('start-date').value = savedFilters.startDate;
+    document.getElementById('end-date').value = savedFilters.endDate;
+    document.getElementById('date-range').value = savedFilters.dateRange;
+    document.getElementById('campaign-name').value = savedFilters.campaignName;
+    document.getElementById('campaign-type').value = savedFilters.campaignType;
+    
     setTimeout(() => {
         fetchDemoData();
     }, 500);
 });
 
-// Atualizar campos de data com base no seletor de período
 function updateDateInputs() {
     const dateRange = document.getElementById('date-range').value;
-    const endDate = new Date('2025-05-07'); // Data final fixa para demo
-    const startDate = new Date('2025-05-07'); // Começar da data final
+    const endDate = new Date('2025-05-07');
+    const startDate = new Date('2025-05-07');
     
     if (dateRange !== 'custom') {
-        // Subtrair dias conforme seleção
         startDate.setDate(startDate.getDate() - parseInt(dateRange));
         
-        // Formatar datas para o input
-        document.getElementById('start-date').value = formatDateForInput(startDate);
-        document.getElementById('end-date').value = formatDateForInput(endDate);
+        const startDateStr = formatDateForInput(startDate);
+        const endDateStr = formatDateForInput(endDate);
+        
+        document.getElementById('start-date').value = startDateStr;
+        document.getElementById('end-date').value = endDateStr;
+        
+        dashboardCache.updateFilter('dateRange', dateRange);
+        dashboardCache.updateFilter('startDate', startDateStr);
+        dashboardCache.updateFilter('endDate', endDateStr);
     }
 }
 
-// Formatar data para o formato do input date (YYYY-MM-DD)
 function formatDateForInput(date) {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -264,7 +329,6 @@ function formatDateForInput(date) {
     return `${year}-${month}-${day}`;
 }
 
-// Formatar data para exibição (DD/MM/YYYY)
 function formatDateForDisplay(dateStr) {
     const date = new Date(dateStr);
     const day = String(date.getDate()).padStart(2, '0');
@@ -273,24 +337,45 @@ function formatDateForDisplay(dateStr) {
     return `${year}-${month}-${day}`;
 }
 
-// Aplicar filtros
 function applyFilters() {
+    const filters = {
+        startDate: document.getElementById('start-date').value,
+        endDate: document.getElementById('end-date').value,
+        campaignName: document.getElementById('campaign-name').value,
+        campaignType: document.getElementById('campaign-type').value,
+        dateRange: document.getElementById('date-range').value
+    };
+    
+    dashboardCache.saveFilters(filters);
     fetchDemoData();
 }
 
-// Dados simulados para o período de 01/05/2025 a 07/05/2025
+function onFilterChange(element) {
+    const key = element.id.replace('-', '');
+    const value = element.value;
+    
+    if (key === 'startdate') {
+        dashboardCache.updateFilter('startDate', value);
+    } else if (key === 'enddate') {
+        dashboardCache.updateFilter('endDate', value);
+    } else if (key === 'campaignname') {
+        dashboardCache.updateFilter('campaignName', value);
+    } else if (key === 'campaigntype') {
+        dashboardCache.updateFilter('campaignType', value);
+    }
+    
+    applyFilters();
+}
+
 function fetchDemoData() {
-    // Atualizar status da API
     document.getElementById('api-status').textContent = 'API conectada com sucesso!';
     document.getElementById('api-status').className = 'api-status';
 
-    // Atualizar estatísticas
     document.getElementById('emails-sent').textContent = '11,235';
     document.getElementById('open-rate').textContent = '29.3%';
     document.getElementById('click-rate').textContent = '6.2%';
     document.getElementById('last-send').textContent = '2h atrás';
 
-    // Filtrar os dados conforme necessário
     const startDate = document.getElementById('start-date').value;
     const endDate = document.getElementById('end-date').value;
     const campaignName = document.getElementById('campaign-name').value;
@@ -298,21 +383,18 @@ function fetchDemoData() {
     
     let filteredData = campaignsData;
     
-    // Filtrar por data
     if (startDate && endDate) {
         filteredData = filteredData.filter(campaign => {
             return campaign.date >= startDate && campaign.date <= endDate;
         });
     }
     
-    // Filtrar por nome de campanha
     if (campaignName !== 'all') {
         filteredData = filteredData.filter(campaign => {
             return campaign.name.toLowerCase().includes(campaignName);
         });
     }
     
-    // Renderizar tabela de campanhas
     const tableBody = document.getElementById('campaigns-table');
     tableBody.innerHTML = '';
 
@@ -321,7 +403,6 @@ function fetchDemoData() {
         row.innerHTML = `<td colspan="14" class="text-center">Nenhum resultado encontrado para os filtros selecionados.</td>`;
         tableBody.appendChild(row);
     } else {
-        // Calcular totais
         let totalSends = 0;
         let totalOpens = 0;
         let totalClicks = 0;
@@ -348,7 +429,6 @@ function fetchDemoData() {
             `;
             tableBody.appendChild(row);
             
-            // Acumular totais
             totalSends += campaign.sends;
             totalOpens += campaign.opens;
             totalClicks += campaign.clicks;
@@ -356,14 +436,12 @@ function fetchDemoData() {
             totalBounces += campaign.bounces;
         });
         
-        // Calcular médias
         const avgOpenRate = totalSends > 0 ? ((totalOpens / totalSends) * 100).toFixed(2) + '%' : '0.00%';
         const avgCTORate = totalOpens > 0 ? ((totalClicks / totalOpens) * 100).toFixed(2) + '%' : '0.00%';
         const avgClickRate = totalSends > 0 ? ((totalClicks / totalSends) * 100).toFixed(2) + '%' : '0.00%';
         const avgUnsubRate = totalSends > 0 ? ((totalUnsubs / totalSends) * 100).toFixed(2) + '%' : '0.00%';
         const avgBounceRate = totalSends > 0 ? ((totalBounces / totalSends) * 100).toFixed(2) + '%' : '0.00%';
         
-        // Atualizar totais no rodapé
         document.getElementById('total-sends').textContent = totalSends;
         document.getElementById('total-opens').textContent = totalOpens;
         document.getElementById('total-clicks').textContent = totalClicks;
@@ -378,7 +456,6 @@ function fetchDemoData() {
     }
 }
 
-// Exportar dados para CSV
 function exportToCSV() {
     const startDate = document.getElementById('start-date').value;
     const endDate = document.getElementById('end-date').value;
@@ -386,7 +463,6 @@ function exportToCSV() {
     
     let csvContent = 'Nome da campanha,Assunto da campanha,Data de envio,Envios,Aberturas,Cliques,Cancelamentos,Bounces,Taxa de abertura,Taxa de clique para abertura,Taxa de cliques,Taxa de cancelamentos,Taxa de encaminhamentos,Taxa de rejeição\n';
     
-    // Filtrar os dados conforme os filtros atuais
     const filteredData = getFilteredData();
     
     filteredData.forEach(campaign => {
@@ -422,7 +498,6 @@ function exportToCSV() {
     document.body.removeChild(link);
 }
 
-// Obter dados filtrados com base nos filtros atuais
 function getFilteredData() {
     const startDate = document.getElementById('start-date').value;
     const endDate = document.getElementById('end-date').value;
@@ -431,14 +506,12 @@ function getFilteredData() {
     
     let filteredData = campaignsData;
     
-    // Filtrar por data
     if (startDate && endDate) {
         filteredData = filteredData.filter(campaign => {
             return campaign.date >= startDate && campaign.date <= endDate;
         });
     }
     
-    // Filtrar por nome de campanha
     if (campaignName !== 'all') {
         filteredData = filteredData.filter(campaign => {
             return campaign.name.toLowerCase().includes(campaignName);
