@@ -3,12 +3,41 @@ const express = require('express');
 const morgan = require('morgan');
 const bodyParser = require('body-parser');
 const path = require('path');
+const cors = require('cors');
 const connectDB = require('./config/databaseConfig');
 const routes = require('./routes/indexRoutes');
 
 // Inicialização do Express
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Configuração CORS melhorada
+const corsOptions = {
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:3000',
+      'http://localhost:4200',
+      'https://metricsmail.web.app',
+      'https://metricsmail.firebaseapp.com',
+      'https://metrics.devoltaaojogo.com'
+    ];
+    
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'Accept'],
+  exposedHeaders: ['Content-Length', 'X-Request-Id']
+};
+
+// Aplicar CORS
+app.use(cors(corsOptions));
 
 // Middlewares básicos
 app.use(morgan('dev'));
@@ -81,7 +110,7 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
   console.log(`Ambiente: ${process.env.NODE_ENV}`);
-  console.log('CORS gerenciado pelo Nginx');
+  console.log('CORS configurado para localhost e produção');
 });
 
 module.exports = app;

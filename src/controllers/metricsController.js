@@ -18,8 +18,9 @@ const getMetricsByDate = async (req, res) => {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
-    const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
-    const end = endDate ? new Date(endDate) : new Date();
+    // Usar as datas exatamente como recebidas do frontend
+    const start = startDate ? new Date(startDate + 'T00:00:00.000Z') : dateHelpers.subDays(new Date(), 30);
+    const end = endDate ? new Date(endDate + 'T23:59:59.999Z') : new Date();
     
     if (!['day', 'week', 'month', 'year'].includes(groupBy)) {
       return responseUtils.error(res, 'O parâmetro groupBy deve ser day, week, month ou year');
@@ -131,8 +132,8 @@ const getMetricsByAccount = async (req, res) => {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
-    const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
-    const end = endDate ? new Date(endDate) : new Date();
+    const start = startDate ? new Date(startDate + 'T00:00:00.000Z') : dateHelpers.subDays(new Date(), 30);
+    const end = endDate ? new Date(endDate + 'T23:59:59.999Z') : new Date();
     
     let accountFilter = { userId };
     
@@ -225,8 +226,8 @@ const getMetricsByEmail = async (req, res) => {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
-    const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
-    const end = endDate ? new Date(endDate) : new Date();
+    const start = startDate ? new Date(startDate + 'T00:00:00.000Z') : dateHelpers.subDays(new Date(), 30);
+    const end = endDate ? new Date(endDate + 'T23:59:59.999Z') : new Date();
     
     let emailFilter = { userId };
     
@@ -383,8 +384,8 @@ const compareMetrics = async (req, res) => {
       return responseUtils.error(res, `Tipo de comparação inválido. Use: ${validCompareTypes.join(', ')}`);
     }
     
-    const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
-    const end = endDate ? new Date(endDate) : new Date();
+    const start = startDate ? new Date(startDate + 'T00:00:00.000Z') : dateHelpers.subDays(new Date(), 30);
+    const end = endDate ? new Date(endDate + 'T23:59:59.999Z') : new Date();
     
     let comparisonResults = [];
     
@@ -647,8 +648,8 @@ const getDetailedEvents = async (req, res) => {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
-    const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 7);
-    const end = endDate ? new Date(endDate) : new Date();
+    const start = startDate ? new Date(startDate + 'T00:00:00.000Z') : dateHelpers.subDays(new Date(), 7);
+    const end = endDate ? new Date(endDate + 'T23:59:59.999Z') : new Date();
     
     const eventFilter = {
       userId,

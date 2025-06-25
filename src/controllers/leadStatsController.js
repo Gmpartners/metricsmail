@@ -3,24 +3,13 @@ const Account = require('../models/accountModel');
 const LeadStats = require('../models/leadStatsModel');
 const responseUtils = require('../utils/responseUtil');
 
-const getBrasilDate = (date) => {
-  const d = new Date(date);
-  d.setHours(d.getHours() - 3);
-  return d;
-};
-
-const formatDate = (date) => {
-  const d = getBrasilDate(date);
-  return d.toISOString().split('T')[0];
-};
-
 const fillMissingDates = (data, startDate, endDate) => {
   const filledData = [];
   const currentDate = new Date(startDate);
   const end = new Date(endDate);
   
   while (currentDate <= end) {
-    const dateStr = formatDate(currentDate);
+    const dateStr = currentDate.toISOString().split('T')[0];
     const existingData = data.find(d => d.date === dateStr);
     
     if (existingData) {
@@ -45,7 +34,7 @@ async function getTodayLeadStats(accountId) {
     if (!account || account.status !== 'active') return { success: false, count: 0 };
     
     const today = new Date();
-    const formattedDate = formatDate(today);
+    const formattedDate = today.toISOString().split('T')[0];
     const startDate = `${formattedDate} 00:00:00`;
     const endDate = `${formattedDate} 23:59:59`;
     
@@ -135,11 +124,11 @@ const getLeadStats = async (req, res) => {
     const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const end = endDate ? new Date(endDate) : new Date();
     
-    const formattedStartDate = formatDate(start);
-    const formattedEndDate = formatDate(end);
-    const today = formatDate(new Date());
-    const yesterday = formatDate(new Date(Date.now() - 24 * 60 * 60 * 1000));
-    const twoDaysAgo = formatDate(new Date(Date.now() - 48 * 60 * 60 * 1000));
+    const formattedStartDate = start.toISOString().split('T')[0];
+    const formattedEndDate = end.toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString().split('T')[0];
     
     const historicalStats = await LeadStats.find({
       userId,
@@ -263,7 +252,7 @@ const collectYesterdayStats = async (req, res) => {
     
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    const dateStr = formatDate(yesterday);
+    const dateStr = yesterday.toISOString().split('T')[0];
     
     let accountFilter = { status: 'active' };
     
