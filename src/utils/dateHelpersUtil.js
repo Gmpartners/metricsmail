@@ -155,6 +155,7 @@ const formatDate = (date, groupBy) => {
   return formatDateISO(d);
 };
 
+<<<<<<< HEAD
 // Converte data para horário de Brasília (UTC-3)
 const toBrazilTime = (date = new Date()) => {
   const utcDate = new Date(date.toISOString());
@@ -166,6 +167,8 @@ const fromBrazilTime = (date = new Date()) => {
   return new Date(date.getTime() + (3 * 60 * 60 * 1000));
 };
 
+=======
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
 module.exports = {
   startOfDay,
   endOfDay,
@@ -176,7 +179,11 @@ module.exports = {
   isValidDate,
   getDateRange,
   getGroupByDateFormat,
+<<<<<<< HEAD
   formatDate,
   toBrazilTime,
   fromBrazilTime
+=======
+  formatDate
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
 };

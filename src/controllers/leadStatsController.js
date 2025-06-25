@@ -3,6 +3,7 @@ const Account = require('../models/accountModel');
 const LeadStats = require('../models/leadStatsModel');
 const responseUtils = require('../utils/responseUtil');
 
+<<<<<<< HEAD
 const fillMissingDates = (data, startDate, endDate) => {
   const filledData = [];
   const currentDate = new Date(startDate);
@@ -26,6 +27,17 @@ const fillMissingDates = (data, startDate, endDate) => {
   }
   
   return filledData;
+=======
+const getBrasilDate = (date) => {
+  const d = new Date(date);
+  d.setHours(d.getHours() - 3);
+  return d;
+};
+
+const formatDate = (date) => {
+  const d = getBrasilDate(date);
+  return d.toISOString().split('T')[0];
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
 };
 
 async function getTodayLeadStats(accountId) {
@@ -34,7 +46,11 @@ async function getTodayLeadStats(accountId) {
     if (!account || account.status !== 'active') return { success: false, count: 0 };
     
     const today = new Date();
+<<<<<<< HEAD
     const formattedDate = today.toISOString().split('T')[0];
+=======
+    const formattedDate = formatDate(today);
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     const startDate = `${formattedDate} 00:00:00`;
     const endDate = `${formattedDate} 23:59:59`;
     
@@ -124,11 +140,17 @@ const getLeadStats = async (req, res) => {
     const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const end = endDate ? new Date(endDate) : new Date();
     
+<<<<<<< HEAD
     const formattedStartDate = start.toISOString().split('T')[0];
     const formattedEndDate = end.toISOString().split('T')[0];
     const today = new Date().toISOString().split('T')[0];
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString().split('T')[0];
+=======
+    const formattedStartDate = formatDate(start);
+    const formattedEndDate = formatDate(end);
+    const today = formatDate(new Date());
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     
     const historicalStats = await LeadStats.find({
       userId,
@@ -136,7 +158,11 @@ const getLeadStats = async (req, res) => {
       date: { 
         $gte: formattedStartDate,
         $lte: formattedEndDate,
+<<<<<<< HEAD
         $nin: [today, yesterday, twoDaysAgo]
+=======
+        $ne: today
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
       }
     }).sort({ date: 1 });
     
@@ -156,6 +182,7 @@ const getLeadStats = async (req, res) => {
       }
     });
     
+<<<<<<< HEAD
     const recentDates = [twoDaysAgo, yesterday, today].filter(date => 
       date >= formattedStartDate && date <= formattedEndDate
     );
@@ -206,6 +233,24 @@ const getLeadStats = async (req, res) => {
       );
     });
     
+=======
+    if (formattedStartDate <= today && today <= formattedEndDate) {
+      const todayPromises = accountIdArray.map(async (accountId) => {
+        const todayStats = await getTodayLeadStats(accountId);
+        if (todayStats.success && statsByAccount[accountId]) {
+          statsByAccount[accountId].push({
+            date: today,
+            count: todayStats.count,
+            isRealTime: true
+          });
+        }
+        return todayStats;
+      });
+      
+      await Promise.all(todayPromises);
+    }
+    
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     const accountMap = {};
     accounts.forEach(account => {
       accountMap[account._id.toString()] = account.name;
@@ -252,7 +297,11 @@ const collectYesterdayStats = async (req, res) => {
     
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
+<<<<<<< HEAD
     const dateStr = yesterday.toISOString().split('T')[0];
+=======
+    const dateStr = formatDate(yesterday);
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     
     let accountFilter = { status: 'active' };
     

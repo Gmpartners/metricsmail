@@ -23,3 +23,7 @@ router.get('/events/recent', metricsController.getRecentEvents);
 router.get('/events', metricsController.getDetailedEvents);
 
 module.exports = router;
+<<<<<<< HEAD
+=======
+
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
