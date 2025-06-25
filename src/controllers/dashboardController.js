@@ -3,35 +3,21 @@ const { Metrics, Account, Event, Email } = require('../models');
 const responseUtils = require('../utils/responseUtil');
 const dateHelpers = require('../utils/dateHelpersUtil');
 
-/**
- * Endpoint unificado para Dashboard
- * Baseado na lógica que funciona corretamente no metricsController.js
- * Retorna todos os dados necessários para o dashboard em uma única requisição
- */
 const getDashboardMetrics = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { 
-      startDate, 
-      endDate, 
-      accountIds, 
-      groupBy = 'day' 
-    } = req.query;
+    const { startDate, endDate, accountIds, groupBy = 'day' } = req.query;
     
     if (!userId) {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
-    console.log();
-    console.log(, { startDate, endDate, accountIds });
+    console.log('[DASHBOARD] Iniciando busca para userId:', userId);
+    console.log('[DASHBOARD] Filtros:', { startDate, endDate, accountIds });
     
-    // Usar as datas exatamente como no metricsController (lógica que funciona)
     const start = startDate ? new Date(startDate + 'T00:00:00.000Z') : dateHelpers.subDays(new Date(), 30);
     const end = endDate ? new Date(endDate + 'T23:59:59.999Z') : new Date();
     
-    console.log();
-    
-    // Filtro de contas (mesma lógica do metricsController)
     let accountFilter = { userId };
     if (accountIds) {
       const accountIdArray = accountIds.split(',').filter(id => id.trim());
@@ -40,20 +26,15 @@ const getDashboardMetrics = async (req, res) => {
       }
     }
     
-    // Buscar contas válidas
     const accounts = await Account.find(accountFilter);
     
     if (accounts.length === 0) {
       return responseUtils.error(res, 'Nenhuma conta válida encontrada para o usuário');
     }
     
-    console.log();
+    console.log('[DASHBOARD] Contas encontradas:', accounts.length);
     
-    // Arrays para armazenar dados processados
     const dailyMetrics = [];
-    const accountMetrics = [];
-    
-    // Processar dados por dia (lógica copiada do getMetricsByDate)
     const currentDate = new Date(start);
     const today = new Date();
     
@@ -67,7 +48,6 @@ const getDashboardMetrics = async (req, res) => {
       const daysDiff = Math.floor((today - currentDate) / (1000 * 60 * 60 * 24));
       const isRealTime = daysDiff <= 2;
       
-      // Dados agregados do dia
       let dayTotals = {
         date: dayStart.toISOString().split('T')[0],
         sentCount: 0,
@@ -81,7 +61,6 @@ const getDashboardMetrics = async (req, res) => {
         accounts: []
       };
       
-      // Processar cada conta para este dia
       for (const account of accounts) {
         const eventFilter = {
           userId,
@@ -97,7 +76,6 @@ const getDashboardMetrics = async (req, res) => {
         const bounceCount = await Event.countDocuments({ ...eventFilter, eventType: 'bounce' });
         const unsubscribeCount = await Event.countDocuments({ ...eventFilter, eventType: 'unsubscribe' });
         
-        // Somar ao total do dia
         if (sentCount > 0 || openCount > 0 || clickCount > 0) {
           dayTotals.sentCount += sentCount;
           dayTotals.openCount += openCount;
@@ -112,19 +90,12 @@ const getDashboardMetrics = async (req, res) => {
             name: account.name,
             provider: account.provider,
             metrics: {
-              sentCount,
-              openCount,
-              uniqueOpenCount,
-              clickCount,
-              uniqueClickCount,
-              bounceCount,
-              unsubscribeCount
+              sentCount, openCount, uniqueOpenCount, clickCount, uniqueClickCount, bounceCount, unsubscribeCount
             }
           });
         }
       }
       
-      // Adicionar ao array se houver dados
       if (dayTotals.sentCount > 0 || dayTotals.openCount > 0 || dayTotals.clickCount > 0) {
         dailyMetrics.push(dayTotals);
       }
@@ -132,9 +103,6 @@ const getDashboardMetrics = async (req, res) => {
       currentDate.setDate(currentDate.getDate() + 1);
     }
     
-    console.log();
-    
-    // Calcular totais agregados do período
     const periodTotals = dailyMetrics.reduce((acc, day) => {
       acc.sentCount += day.sentCount;
       acc.openCount += day.openCount;
@@ -145,16 +113,9 @@ const getDashboardMetrics = async (req, res) => {
       acc.unsubscribeCount += day.unsubscribeCount;
       return acc;
     }, {
-      sentCount: 0,
-      openCount: 0,
-      uniqueOpenCount: 0,
-      clickCount: 0,
-      uniqueClickCount: 0,
-      bounceCount: 0,
-      unsubscribeCount: 0
+      sentCount: 0, openCount: 0, uniqueOpenCount: 0, clickCount: 0, uniqueClickCount: 0, bounceCount: 0, unsubscribeCount: 0
     });
     
-    // Calcular taxas do período
     const periodRates = {
       openRate: periodTotals.sentCount > 0 ? (periodTotals.openCount / periodTotals.sentCount) * 100 : 0,
       uniqueOpenRate: periodTotals.sentCount > 0 ? (periodTotals.uniqueOpenCount / periodTotals.sentCount) * 100 : 0,
@@ -166,13 +127,9 @@ const getDashboardMetrics = async (req, res) => {
       unsubscribeRate: periodTotals.sentCount > 0 ? (periodTotals.unsubscribeCount / periodTotals.sentCount) * 100 : 0
     };
     
-    // Preparar dados para gráficos (formato otimizado para o frontend)
     const chartData = {
       timeline: dailyMetrics.map(day => ({
-        date: new Date(day.date).toLocaleDateString('pt-BR', { 
-          day: '2-digit',
-          month: '2-digit'
-        }),
+        date: new Date(day.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
         fullDate: day.date,
         enviados: day.sentCount,
         aberturas: day.openCount,
@@ -181,10 +138,9 @@ const getDashboardMetrics = async (req, res) => {
         cliquesUnicos: day.uniqueClickCount,
         isRealTime: day.isRealTime
       })),
-      byAccount: [] // Será preenchido abaixo
+      byAccount: []
     };
     
-    // Processar métricas agregadas por conta para o gráfico de contas
     const accountTotalsMap = new Map();
     
     dailyMetrics.forEach(day => {
@@ -196,13 +152,7 @@ const getDashboardMetrics = async (req, res) => {
             id: accountData.id,
             name: accountData.name,
             provider: accountData.provider,
-            sentCount: 0,
-            openCount: 0,
-            uniqueOpenCount: 0,
-            clickCount: 0,
-            uniqueClickCount: 0,
-            bounceCount: 0,
-            unsubscribeCount: 0
+            sentCount: 0, openCount: 0, uniqueOpenCount: 0, clickCount: 0, uniqueClickCount: 0, bounceCount: 0, unsubscribeCount: 0
           });
         }
         
@@ -217,7 +167,6 @@ const getDashboardMetrics = async (req, res) => {
       });
     });
     
-    // Converter para array e calcular taxas por conta
     chartData.byAccount = Array.from(accountTotalsMap.values()).map(account => ({
       id: account.id,
       name: account.name.substring(0, 15),
@@ -233,7 +182,6 @@ const getDashboardMetrics = async (req, res) => {
       ctr: account.openCount > 0 ? (account.clickCount / account.openCount) * 100 : 0
     }));
     
-    // Estatísticas adicionais
     const stats = {
       totalAccounts: accounts.length,
       daysInPeriod: dailyMetrics.length,
@@ -244,54 +192,28 @@ const getDashboardMetrics = async (req, res) => {
       }
     };
     
-    const response = {
-      success: true,
-      data: {
-        // Totais do período (substituem os cálculos complexos do frontend)
-        totals: periodTotals,
-        
-        // Taxas calculadas (substituem os cálculos do frontend)
-        rates: periodRates,
-        
-        // Dados para gráficos já formatados
-        chartData,
-        
-        // Informações do período
-        period: {
-          startDate: start.toISOString().split('T')[0],
-          endDate: end.toISOString().split('T')[0],
-          days: dailyMetrics.length
-        },
-        
-        // Estatísticas adicionais
-        stats,
-        
-        // Controle de estado
-        isFiltered: !!(startDate && endDate),
-        accountsIncluded: accountIds ? accountIds.split(',').length : accounts.length,
-        
-        // Metadados para cache/debug
-        generatedAt: new Date().toISOString(),
-        version: '1.0.0'
-      }
-    };
+    console.log('[DASHBOARD] Processamento concluído:', periodTotals.sentCount, 'enviados');
     
-    console.log();
-    console.log();
-    console.log();
-    console.log();
-    console.log();
-    console.log();
-    
-    return responseUtils.success(res, response.data);
+    return responseUtils.success(res, {
+      totals: periodTotals,
+      rates: periodRates,
+      chartData,
+      period: {
+        startDate: start.toISOString().split('T')[0],
+        endDate: end.toISOString().split('T')[0],
+        days: dailyMetrics.length
+      },
+      stats,
+      isFiltered: !!(startDate && endDate),
+      accountsIncluded: accountIds ? accountIds.split(',').length : accounts.length,
+      generatedAt: new Date().toISOString(),
+      version: '1.0.0'
+    });
     
   } catch (err) {
-    console.error('❌ [DASHBOARD] Erro ao processar:', err);
+    console.error('[DASHBOARD] Erro:', err);
     return responseUtils.serverError(res, err);
   }
 };
 
-module.exports = {
-  getDashboardMetrics
-};
-
+module.exports = { getDashboardMetrics };
