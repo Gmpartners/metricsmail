@@ -2,9 +2,13 @@ const express = require('express');
 const router = express.Router({ mergeParams: true }); // importante para acessar userId
 const metricsController = require('../controllers/metricsController');
 const { getMetricsSummary } = require('../controllers/metricsSummaryController');
+const { getDashboardMetrics } = require('../controllers/dashboardController');
 
 // Rota raiz para obter resumo de métricas
 router.get('/', getMetricsSummary);
+
+// ✨ NOVA ROTA: Dashboard unificado (deve vir antes das rotas by-*)
+router.get('/dashboard', getDashboardMetrics);
 
 // Comparação de métricas (deve vir antes da rota by-*)
 router.get('/compare', metricsController.compareMetrics);
