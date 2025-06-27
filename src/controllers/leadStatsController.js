@@ -33,8 +33,8 @@ async function getTodayLeadStats(accountId) {
     
     const today = new Date();
     const formattedDate = formatCurrentDate(today);
-    const startDate = ;
-    const endDate = ;
+    const startDate = formattedDate;
+    const endDate = formattedDate;
     
     const result = await account.getMauticLeadsByDate(startDate, endDate);
     return { 
@@ -43,7 +43,7 @@ async function getTodayLeadStats(accountId) {
       isRealTime: true
     };
   } catch (error) {
-    console.error();
+    console.error('Erro ao buscar leads de hoje:', error);
     return { success: false, count: 0 };
   }
 }
@@ -70,13 +70,13 @@ const saveLeadStats = async (req, res) => {
       return responseUtils.notFound(res, 'Conta não encontrada ou inativa');
     }
     
-    const startDate = ;
-    const endDate = ;
+    const startDate = date;
+    const endDate = date;
     
     const result = await account.getMauticLeadsByDate(startDate, endDate);
     
     if (!result.success) {
-      return responseUtils.error(res, );
+      return responseUtils.error(res, result.message || 'Erro ao buscar dados do Mautic');
     }
     
     const stats = await LeadStats.findOneAndUpdate(
@@ -193,7 +193,7 @@ const getLeadStats = async (req, res) => {
       
       return {
         accountId,
-        accountName: accountMap[accountId] || ,
+        accountName: accountMap[accountId] || 'Conta sem nome',
         color: colors[index % colors.length],
         data: statsByAccount[accountId].sort((a, b) => a.date.localeCompare(b.date))
       };
@@ -258,8 +258,8 @@ const collectYesterdayStats = async (req, res) => {
     
     for (const account of accounts) {
       try {
-        const startDate = ;
-        const endDate = ;
+        const startDate = dateStr;
+        const endDate = dateStr;
         
         const result = await account.getMauticLeadsByDate(startDate, endDate);
         
@@ -323,3 +323,4 @@ module.exports = {
   saveLeadStats,
   collectYesterdayStats
 };
+
