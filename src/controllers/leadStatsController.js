@@ -3,27 +3,26 @@ const Account = require('../models/accountModel');
 const LeadStats = require('../models/leadStatsModel');
 const responseUtils = require('../utils/responseUtil');
 
-// Função para converter data para timezone do Brasil (apenas para data atual)
-const getBrasilDate = (date) => {
-  const d = new Date(date);
-  d.setHours(d.getHours() - 3);
-  return d;
-};
-
-// Função para formatar data atual (com timezone)
-const formatCurrentDate = (date) => {
-  const d = getBrasilDate(date);
-  return d.toISOString().split('T')[0];
-};
-
-// Função para formatar datas de filtro (SEM timezone) - CORREÇÃO PRINCIPAL
-const formatFilterDate = (dateString) => {
-  if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-    return dateString; // Retorna a data como está, sem conversão
+// ✅ CORREÇÃO: Função simplificada para formatar data sem conversão de timezone problemática
+const formatDate = (date) => {
+  if (typeof date === 'string' && date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    return date; // Retorna string de data como está
   }
-  // Se for um objeto Date, converter para string sem timezone
-  const d = new Date(dateString);
-  return d.toISOString().split('T')[0];
+  
+  // Para objetos Date, usar apenas a parte da data local
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return ;
+};
+
+// ✅ NOVA: Função para obter data atual do Brasil sem problemas de timezone
+const getTodayBrazil = () => {
+  const now = new Date();
+  // Criar data no timezone do Brasil (UTC-3)
+  const brazilTime = new Date(now.getTime() - (3 * 60 * 60 * 1000));
+  return formatDate(brazilTime);
 };
 
 async function getTodayLeadStats(accountId) {
@@ -31,16 +30,19 @@ async function getTodayLeadStats(accountId) {
     const account = await Account.findById(accountId);
     if (!account || account.status !== 'active') return { success: false, count: 0 };
     
-    const today = new Date();
-    const formattedDate = formatCurrentDate(today);
-    const startDate = formattedDate;
-    const endDate = formattedDate;
+    // ✅ CORREÇÃO: Usar data do Brasil atual
+    const todayBrazil = getTodayBrazil();
+    const startDate = todayBrazil;
+    const endDate = todayBrazil;
+    
+    console.log('[TODAY_LEADS] Buscando leads para:', { accountId, date: todayBrazil });
     
     const result = await account.getMauticLeadsByDate(startDate, endDate);
     return { 
       success: true, 
       count: result.success ? result.total : 0,
-      isRealTime: true
+      isRealTime: true,
+      date: todayBrazil
     };
   } catch (error) {
     console.error('Erro ao buscar leads de hoje:', error);
@@ -121,26 +123,26 @@ const getLeadStats = async (req, res) => {
     }
     
     const accountIdArray = accounts.map(account => account._id.toString());
-    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const end = endDate ? new Date(endDate) : new Date();
     
-    // CORREÇÃO: Usar formatFilterDate para datas de filtro
-    const formattedStartDate = formatFilterDate(startDate || start);
-    const formattedEndDate = formatFilterDate(endDate || end);
-    const today = formatCurrentDate(new Date());
+    // ✅ CORREÇÃO: Usar formatação de data consistente
+    const formattedStartDate = formatDate(startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+    const formattedEndDate = formatDate(endDate || new Date());
+    const todayBrazil = getTodayBrazil();
     
     console.log('[LEADSTATS] Datas processadas:', { 
       original: { startDate, endDate },
-      formatted: { formattedStartDate, formattedEndDate, today }
+      formatted: { formattedStartDate, formattedEndDate },
+      todayBrazil: todayBrazil
     });
     
+    // Buscar dados históricos (exceto hoje)
     const historicalStats = await LeadStats.find({
       userId,
       accountId: { $in: accountIdArray },
       date: { 
         $gte: formattedStartDate,
         $lte: formattedEndDate,
-        $ne: today
+        $ne: todayBrazil
       }
     }).sort({ date: 1 });
     
@@ -162,17 +164,22 @@ const getLeadStats = async (req, res) => {
       }
     });
     
-    // Verificar se deve buscar dados de hoje em tempo real
-    const shouldGetToday = formattedStartDate <= today && today <= formattedEndDate;
-    console.log('[LEADSTATS] Deve buscar dados de hoje?', shouldGetToday);
+    // ✅ CORREÇÃO: Verificar se deve buscar dados de hoje usando comparação correta
+    const shouldGetToday = formattedStartDate <= todayBrazil && todayBrazil <= formattedEndDate;
+    console.log('[LEADSTATS] Deve buscar dados de hoje?', shouldGetToday, {
+      startDate: formattedStartDate,
+      endDate: formattedEndDate,
+      today: todayBrazil
+    });
     
     if (shouldGetToday) {
+      console.log('[LEADSTATS] Buscando dados de hoje em tempo real...');
       const todayPromises = accountIdArray.map(async (accountId) => {
         const todayStats = await getTodayLeadStats(accountId);
         console.log('[LEADSTATS] Dados de hoje para conta', accountId, ':', todayStats);
         if (todayStats.success && statsByAccount[accountId]) {
           statsByAccount[accountId].push({
-            date: today,
+            date: todayBrazil,
             count: todayStats.count,
             isRealTime: true
           });
@@ -214,7 +221,12 @@ const getLeadStats = async (req, res) => {
     console.log('[LEADSTATS] Resultado final:', { 
       datasetsCount: datasets.length, 
       totalLeads, 
-      avgPerDay 
+      avgPerDay,
+      datasets: datasets.map(d => ({ 
+        accountName: d.accountName, 
+        dataPoints: d.data.length,
+        dates: d.data.map(item => item.date)
+      }))
     });
     
     return responseUtils.success(res, {
@@ -234,9 +246,10 @@ const collectYesterdayStats = async (req, res) => {
   try {
     const { userId } = req.params;
     
+    // ✅ CORREÇÃO: Calcular ontem usando data local do Brasil
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    const dateStr = formatCurrentDate(yesterday);
+    const dateStr = formatDate(yesterday);
     
     let accountFilter = { status: 'active' };
     
@@ -323,4 +336,3 @@ module.exports = {
   saveLeadStats,
   collectYesterdayStats
 };
-
