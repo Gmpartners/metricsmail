@@ -18,14 +18,23 @@ const getMetricsByDate = async (req, res) => {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
+<<<<<<< HEAD
+    // Usar as datas exatamente como recebidas do frontend
+    const start = startDate ? new Date(startDate + 'T00:00:00.000Z') : dateHelpers.subDays(new Date(), 30);
+    const end = endDate ? new Date(endDate + 'T23:59:59.999Z') : new Date();
+=======
     const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
     const end = endDate ? new Date(endDate) : new Date();
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     
     if (!['day', 'week', 'month', 'year'].includes(groupBy)) {
       return responseUtils.error(res, 'O parâmetro groupBy deve ser day, week, month ou year');
     }
     
+<<<<<<< HEAD
+=======
     // NOVA LÓGICA: Calcular diretamente dos Events
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     let accountFilter = { userId };
     if (accountIds) {
       const accountIdArray = accountIds.split(',').filter(id => id.trim());
@@ -40,9 +49,15 @@ const getMetricsByDate = async (req, res) => {
       return responseUtils.error(res, 'Nenhuma conta válida encontrada para o usuário');
     }
     
+<<<<<<< HEAD
+    const metrics = [];
+    const currentDate = new Date(start);
+    const today = new Date();
+=======
     // Gerar dados dia por dia
     const metrics = [];
     const currentDate = new Date(start);
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     
     while (currentDate <= end) {
       const dayStart = new Date(currentDate);
@@ -51,6 +66,12 @@ const getMetricsByDate = async (req, res) => {
       const dayEnd = new Date(currentDate);
       dayEnd.setHours(23, 59, 59, 999);
       
+<<<<<<< HEAD
+      const daysDiff = Math.floor((today - currentDate) / (1000 * 60 * 60 * 24));
+      const isRealTime = daysDiff <= 2;
+      
+=======
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
       for (const account of accounts) {
         const eventFilter = {
           userId,
@@ -65,7 +86,10 @@ const getMetricsByDate = async (req, res) => {
           }
         }
         
+<<<<<<< HEAD
+=======
         // Contar eventos por tipo
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
         const sentCount = await Event.countDocuments({ ...eventFilter, eventType: 'send' });
         const openCount = await Event.countDocuments({ ...eventFilter, eventType: 'open' });
         const uniqueOpenCount = await Event.countDocuments({ ...eventFilter, eventType: 'open', isFirstInteraction: true });
@@ -74,7 +98,10 @@ const getMetricsByDate = async (req, res) => {
         const bounceCount = await Event.countDocuments({ ...eventFilter, eventType: 'bounce' });
         const unsubscribeCount = await Event.countDocuments({ ...eventFilter, eventType: 'unsubscribe' });
         
+<<<<<<< HEAD
+=======
         // Calcular taxas
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
         const openRate = sentCount > 0 ? (openCount / sentCount) * 100 : 0;
         const uniqueOpenRate = sentCount > 0 ? (uniqueOpenCount / sentCount) * 100 : 0;
         const clickRate = sentCount > 0 ? (clickCount / sentCount) * 100 : 0;
@@ -83,7 +110,10 @@ const getMetricsByDate = async (req, res) => {
         const bounceRate = sentCount > 0 ? (bounceCount / sentCount) * 100 : 0;
         const unsubscribeRate = sentCount > 0 ? (unsubscribeCount / sentCount) * 100 : 0;
         
+<<<<<<< HEAD
+=======
         // Só adicionar se houver algum evento no dia
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
         if (sentCount > 0 || openCount > 0 || clickCount > 0) {
           metrics.push({
             date: dayStart.toISOString().split('T')[0],
@@ -93,6 +123,10 @@ const getMetricsByDate = async (req, res) => {
               provider: account.provider
             },
             period: groupBy,
+<<<<<<< HEAD
+            isRealTime: isRealTime,
+=======
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
             metrics: {
               sentCount,
               openCount,
@@ -131,8 +165,13 @@ const getMetricsByAccount = async (req, res) => {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
+<<<<<<< HEAD
+    const start = startDate ? new Date(startDate + 'T00:00:00.000Z') : dateHelpers.subDays(new Date(), 30);
+    const end = endDate ? new Date(endDate + 'T23:59:59.999Z') : new Date();
+=======
     const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
     const end = endDate ? new Date(endDate) : new Date();
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     
     let accountFilter = { userId };
     
@@ -225,8 +264,13 @@ const getMetricsByEmail = async (req, res) => {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
+<<<<<<< HEAD
+    const start = startDate ? new Date(startDate + 'T00:00:00.000Z') : dateHelpers.subDays(new Date(), 30);
+    const end = endDate ? new Date(endDate + 'T23:59:59.999Z') : new Date();
+=======
     const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
     const end = endDate ? new Date(endDate) : new Date();
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     
     let emailFilter = { userId };
     
@@ -380,11 +424,19 @@ const compareMetrics = async (req, res) => {
     
     const validCompareTypes = ['accounts', 'emails'];
     if (!validCompareTypes.includes(compareType)) {
+<<<<<<< HEAD
+      return responseUtils.error(res, `Tipo de comparação inválido. Use: ${validCompareTypes.join(', ')}`);
+    }
+    
+    const start = startDate ? new Date(startDate + 'T00:00:00.000Z') : dateHelpers.subDays(new Date(), 30);
+    const end = endDate ? new Date(endDate + 'T23:59:59.999Z') : new Date();
+=======
       return responseUtils.error(res, );
     }
     
     const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 30);
     const end = endDate ? new Date(endDate) : new Date();
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     
     let comparisonResults = [];
     
@@ -647,8 +699,13 @@ const getDetailedEvents = async (req, res) => {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
+<<<<<<< HEAD
+    const start = startDate ? new Date(startDate + 'T00:00:00.000Z') : dateHelpers.subDays(new Date(), 7);
+    const end = endDate ? new Date(endDate + 'T23:59:59.999Z') : new Date();
+=======
     const start = startDate ? new Date(startDate) : dateHelpers.subDays(new Date(), 7);
     const end = endDate ? new Date(endDate) : new Date();
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     
     const eventFilter = {
       userId,
@@ -747,4 +804,7 @@ module.exports = {
   getRecentEvents,
   getDetailedEvents
 };
+<<<<<<< HEAD
+=======
 
+>>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf

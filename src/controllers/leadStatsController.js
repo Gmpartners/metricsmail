@@ -3,41 +3,27 @@ const Account = require('../models/accountModel');
 const LeadStats = require('../models/leadStatsModel');
 const responseUtils = require('../utils/responseUtil');
 
-<<<<<<< HEAD
-const fillMissingDates = (data, startDate, endDate) => {
-  const filledData = [];
-  const currentDate = new Date(startDate);
-  const end = new Date(endDate);
-  
-  while (currentDate <= end) {
-    const dateStr = currentDate.toISOString().split('T')[0];
-    const existingData = data.find(d => d.date === dateStr);
-    
-    if (existingData) {
-      filledData.push(existingData);
-    } else {
-      filledData.push({
-        date: dateStr,
-        count: 0,
-        isRealTime: false
-      });
-    }
-    
-    currentDate.setDate(currentDate.getDate() + 1);
-  }
-  
-  return filledData;
-=======
+// Função para converter data para timezone do Brasil (apenas para data atual)
 const getBrasilDate = (date) => {
   const d = new Date(date);
   d.setHours(d.getHours() - 3);
   return d;
 };
 
-const formatDate = (date) => {
+// Função para formatar data atual (com timezone)
+const formatCurrentDate = (date) => {
   const d = getBrasilDate(date);
   return d.toISOString().split('T')[0];
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
+};
+
+// Função para formatar datas de filtro (SEM timezone) - CORREÇÃO PRINCIPAL
+const formatFilterDate = (dateString) => {
+  if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    return dateString; // Retorna a data como está, sem conversão
+  }
+  // Se for um objeto Date, converter para string sem timezone
+  const d = new Date(dateString);
+  return d.toISOString().split('T')[0];
 };
 
 async function getTodayLeadStats(accountId) {
@@ -46,13 +32,9 @@ async function getTodayLeadStats(accountId) {
     if (!account || account.status !== 'active') return { success: false, count: 0 };
     
     const today = new Date();
-<<<<<<< HEAD
-    const formattedDate = today.toISOString().split('T')[0];
-=======
-    const formattedDate = formatDate(today);
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
-    const startDate = `${formattedDate} 00:00:00`;
-    const endDate = `${formattedDate} 23:59:59`;
+    const formattedDate = formatCurrentDate(today);
+    const startDate = ;
+    const endDate = ;
     
     const result = await account.getMauticLeadsByDate(startDate, endDate);
     return { 
@@ -61,7 +43,7 @@ async function getTodayLeadStats(accountId) {
       isRealTime: true
     };
   } catch (error) {
-    console.error(`Erro ao buscar dados do dia atual: ${error.message}`);
+    console.error();
     return { success: false, count: 0 };
   }
 }
@@ -88,13 +70,13 @@ const saveLeadStats = async (req, res) => {
       return responseUtils.notFound(res, 'Conta não encontrada ou inativa');
     }
     
-    const startDate = `${date} 00:00:00`;
-    const endDate = `${date} 23:59:59`;
+    const startDate = ;
+    const endDate = ;
     
     const result = await account.getMauticLeadsByDate(startDate, endDate);
     
     if (!result.success) {
-      return responseUtils.error(res, `Falha ao buscar leads: ${result.message}`);
+      return responseUtils.error(res, );
     }
     
     const stats = await LeadStats.findOneAndUpdate(
@@ -118,6 +100,8 @@ const getLeadStats = async (req, res) => {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
+    console.log('[LEADSTATS] Parâmetros recebidos:', { userId, accountIds, startDate, endDate });
+    
     let accountFilter = { userId, status: 'active' };
     
     if (accountIds) {
@@ -140,17 +124,15 @@ const getLeadStats = async (req, res) => {
     const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const end = endDate ? new Date(endDate) : new Date();
     
-<<<<<<< HEAD
-    const formattedStartDate = start.toISOString().split('T')[0];
-    const formattedEndDate = end.toISOString().split('T')[0];
-    const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString().split('T')[0];
-=======
-    const formattedStartDate = formatDate(start);
-    const formattedEndDate = formatDate(end);
-    const today = formatDate(new Date());
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
+    // CORREÇÃO: Usar formatFilterDate para datas de filtro
+    const formattedStartDate = formatFilterDate(startDate || start);
+    const formattedEndDate = formatFilterDate(endDate || end);
+    const today = formatCurrentDate(new Date());
+    
+    console.log('[LEADSTATS] Datas processadas:', { 
+      original: { startDate, endDate },
+      formatted: { formattedStartDate, formattedEndDate, today }
+    });
     
     const historicalStats = await LeadStats.find({
       userId,
@@ -158,13 +140,11 @@ const getLeadStats = async (req, res) => {
       date: { 
         $gte: formattedStartDate,
         $lte: formattedEndDate,
-<<<<<<< HEAD
-        $nin: [today, yesterday, twoDaysAgo]
-=======
         $ne: today
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
       }
     }).sort({ date: 1 });
+    
+    console.log('[LEADSTATS] Dados históricos encontrados:', historicalStats.length);
     
     const statsByAccount = {};
     
@@ -182,61 +162,14 @@ const getLeadStats = async (req, res) => {
       }
     });
     
-<<<<<<< HEAD
-    const recentDates = [twoDaysAgo, yesterday, today].filter(date => 
-      date >= formattedStartDate && date <= formattedEndDate
-    );
-
-    for (const date of recentDates) {
-      const datePromises = accountIdArray.map(async (accountId) => {
-        try {
-          const account = await Account.findById(accountId);
-          if (!account || account.status !== 'active') return;
-          
-          const startDate = `${date} 00:00:00`;
-          const endDate = `${date} 23:59:59`;
-          
-          const result = await account.getMauticLeadsByDate(startDate, endDate);
-          
-          if (result.success) {
-            await LeadStats.findOneAndUpdate(
-              { userId, accountId, date },
-              { count: result.total, lastUpdated: new Date() },
-              { upsert: true }
-            );
-            
-            if (statsByAccount[accountId]) {
-              statsByAccount[accountId] = statsByAccount[accountId].filter(
-                item => item.date !== date
-              );
-              
-              statsByAccount[accountId].push({
-                date: date,
-                count: result.total,
-                isRealTime: true
-              });
-            }
-          }
-        } catch (error) {
-          console.error(`Erro ao buscar dados em tempo real para ${date}:`, error.message);
-        }
-      });
-      
-      await Promise.all(datePromises);
-    }
+    // Verificar se deve buscar dados de hoje em tempo real
+    const shouldGetToday = formattedStartDate <= today && today <= formattedEndDate;
+    console.log('[LEADSTATS] Deve buscar dados de hoje?', shouldGetToday);
     
-    Object.keys(statsByAccount).forEach(accountId => {
-      statsByAccount[accountId] = fillMissingDates(
-        statsByAccount[accountId], 
-        formattedStartDate, 
-        formattedEndDate
-      );
-    });
-    
-=======
-    if (formattedStartDate <= today && today <= formattedEndDate) {
+    if (shouldGetToday) {
       const todayPromises = accountIdArray.map(async (accountId) => {
         const todayStats = await getTodayLeadStats(accountId);
+        console.log('[LEADSTATS] Dados de hoje para conta', accountId, ':', todayStats);
         if (todayStats.success && statsByAccount[accountId]) {
           statsByAccount[accountId].push({
             date: today,
@@ -250,7 +183,6 @@ const getLeadStats = async (req, res) => {
       await Promise.all(todayPromises);
     }
     
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     const accountMap = {};
     accounts.forEach(account => {
       accountMap[account._id.toString()] = account.name;
@@ -261,7 +193,7 @@ const getLeadStats = async (req, res) => {
       
       return {
         accountId,
-        accountName: accountMap[accountId] || `Conta ${accountId}`,
+        accountName: accountMap[accountId] || ,
         color: colors[index % colors.length],
         data: statsByAccount[accountId].sort((a, b) => a.date.localeCompare(b.date))
       };
@@ -279,6 +211,12 @@ const getLeadStats = async (req, res) => {
     
     const avgPerDay = dayCount > 0 ? totalLeads / (dayCount / datasets.length) : 0;
     
+    console.log('[LEADSTATS] Resultado final:', { 
+      datasetsCount: datasets.length, 
+      totalLeads, 
+      avgPerDay 
+    });
+    
     return responseUtils.success(res, {
       datasets,
       summary: {
@@ -287,6 +225,7 @@ const getLeadStats = async (req, res) => {
       }
     });
   } catch (err) {
+    console.error('[LEADSTATS] Erro:', err);
     return responseUtils.serverError(res, err);
   }
 };
@@ -297,11 +236,7 @@ const collectYesterdayStats = async (req, res) => {
     
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-<<<<<<< HEAD
-    const dateStr = yesterday.toISOString().split('T')[0];
-=======
-    const dateStr = formatDate(yesterday);
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
+    const dateStr = formatCurrentDate(yesterday);
     
     let accountFilter = { status: 'active' };
     
@@ -323,8 +258,8 @@ const collectYesterdayStats = async (req, res) => {
     
     for (const account of accounts) {
       try {
-        const startDate = `${dateStr} 00:00:00`;
-        const endDate = `${dateStr} 23:59:59`;
+        const startDate = ;
+        const endDate = ;
         
         const result = await account.getMauticLeadsByDate(startDate, endDate);
         

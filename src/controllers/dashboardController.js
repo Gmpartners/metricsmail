@@ -3,51 +3,21 @@ const { Metrics, Account, Event, Email } = require('../models');
 const responseUtils = require('../utils/responseUtil');
 const dateHelpers = require('../utils/dateHelpersUtil');
 
-<<<<<<< HEAD
-/**
- * Endpoint unificado para Dashboard
- * Baseado na lógica que funciona corretamente no metricsController.js
- * Retorna todos os dados necessários para o dashboard em uma única requisição
- */
-const getDashboardMetrics = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { 
-      startDate, 
-      endDate, 
-      accountIds, 
-      groupBy = 'day' 
-    } = req.query;
-=======
 const getDashboardMetrics = async (req, res) => {
   try {
     const { userId } = req.params;
     const { startDate, endDate, accountIds, groupBy = 'day' } = req.query;
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     
     if (!userId) {
       return responseUtils.error(res, 'User ID é obrigatório');
     }
     
-<<<<<<< HEAD
-    console.log(`🎯 [DASHBOARD] Iniciando busca para userId: ${userId}`);
-    console.log(`📅 [DASHBOARD] Filtros recebidos:`, { startDate, endDate, accountIds });
-    
-    // Usar as datas exatamente como no metricsController (lógica que funciona)
-    const start = startDate ? new Date(startDate + 'T00:00:00.000Z') : dateHelpers.subDays(new Date(), 30);
-    const end = endDate ? new Date(endDate + 'T23:59:59.999Z') : new Date();
-    
-    console.log(`📊 [DASHBOARD] Período processado: ${start.toISOString()} até ${end.toISOString()}`);
-    
-    // Filtro de contas (mesma lógica do metricsController)
-=======
     console.log('[DASHBOARD] Iniciando busca para userId:', userId);
     console.log('[DASHBOARD] Filtros:', { startDate, endDate, accountIds });
     
     const start = startDate ? new Date(startDate + 'T00:00:00.000Z') : dateHelpers.subDays(new Date(), 30);
     const end = endDate ? new Date(endDate + 'T23:59:59.999Z') : new Date();
     
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     let accountFilter = { userId };
     if (accountIds) {
       const accountIdArray = accountIds.split(',').filter(id => id.trim());
@@ -56,29 +26,15 @@ const getDashboardMetrics = async (req, res) => {
       }
     }
     
-<<<<<<< HEAD
-    // Buscar contas válidas
-=======
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     const accounts = await Account.find(accountFilter);
     
     if (accounts.length === 0) {
       return responseUtils.error(res, 'Nenhuma conta válida encontrada para o usuário');
     }
     
-<<<<<<< HEAD
-    console.log(`🏢 [DASHBOARD] Contas encontradas: ${accounts.length}`);
-    
-    // Arrays para armazenar dados processados
-    const dailyMetrics = [];
-    const accountMetrics = [];
-    
-    // Processar dados por dia (lógica copiada do getMetricsByDate)
-=======
     console.log('[DASHBOARD] Contas encontradas:', accounts.length);
     
     const dailyMetrics = [];
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     const currentDate = new Date(start);
     const today = new Date();
     
@@ -92,10 +48,6 @@ const getDashboardMetrics = async (req, res) => {
       const daysDiff = Math.floor((today - currentDate) / (1000 * 60 * 60 * 24));
       const isRealTime = daysDiff <= 2;
       
-<<<<<<< HEAD
-      // Dados agregados do dia
-=======
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
       let dayTotals = {
         date: dayStart.toISOString().split('T')[0],
         sentCount: 0,
@@ -109,10 +61,6 @@ const getDashboardMetrics = async (req, res) => {
         accounts: []
       };
       
-<<<<<<< HEAD
-      // Processar cada conta para este dia
-=======
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
       for (const account of accounts) {
         const eventFilter = {
           userId,
@@ -128,10 +76,6 @@ const getDashboardMetrics = async (req, res) => {
         const bounceCount = await Event.countDocuments({ ...eventFilter, eventType: 'bounce' });
         const unsubscribeCount = await Event.countDocuments({ ...eventFilter, eventType: 'unsubscribe' });
         
-<<<<<<< HEAD
-        // Somar ao total do dia
-=======
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
         if (sentCount > 0 || openCount > 0 || clickCount > 0) {
           dayTotals.sentCount += sentCount;
           dayTotals.openCount += openCount;
@@ -146,26 +90,12 @@ const getDashboardMetrics = async (req, res) => {
             name: account.name,
             provider: account.provider,
             metrics: {
-<<<<<<< HEAD
-              sentCount,
-              openCount,
-              uniqueOpenCount,
-              clickCount,
-              uniqueClickCount,
-              bounceCount,
-              unsubscribeCount
-=======
               sentCount, openCount, uniqueOpenCount, clickCount, uniqueClickCount, bounceCount, unsubscribeCount
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
             }
           });
         }
       }
       
-<<<<<<< HEAD
-      // Adicionar ao array se houver dados
-=======
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
       if (dayTotals.sentCount > 0 || dayTotals.openCount > 0 || dayTotals.clickCount > 0) {
         dailyMetrics.push(dayTotals);
       }
@@ -173,12 +103,6 @@ const getDashboardMetrics = async (req, res) => {
       currentDate.setDate(currentDate.getDate() + 1);
     }
     
-<<<<<<< HEAD
-    console.log(`📈 [DASHBOARD] Dias processados: ${dailyMetrics.length}`);
-    
-    // Calcular totais agregados do período
-=======
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     const periodTotals = dailyMetrics.reduce((acc, day) => {
       acc.sentCount += day.sentCount;
       acc.openCount += day.openCount;
@@ -189,22 +113,9 @@ const getDashboardMetrics = async (req, res) => {
       acc.unsubscribeCount += day.unsubscribeCount;
       return acc;
     }, {
-<<<<<<< HEAD
-      sentCount: 0,
-      openCount: 0,
-      uniqueOpenCount: 0,
-      clickCount: 0,
-      uniqueClickCount: 0,
-      bounceCount: 0,
-      unsubscribeCount: 0
-    });
-    
-    // Calcular taxas do período
-=======
       sentCount: 0, openCount: 0, uniqueOpenCount: 0, clickCount: 0, uniqueClickCount: 0, bounceCount: 0, unsubscribeCount: 0
     });
     
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     const periodRates = {
       openRate: periodTotals.sentCount > 0 ? (periodTotals.openCount / periodTotals.sentCount) * 100 : 0,
       uniqueOpenRate: periodTotals.sentCount > 0 ? (periodTotals.uniqueOpenCount / periodTotals.sentCount) * 100 : 0,
@@ -216,19 +127,9 @@ const getDashboardMetrics = async (req, res) => {
       unsubscribeRate: periodTotals.sentCount > 0 ? (periodTotals.unsubscribeCount / periodTotals.sentCount) * 100 : 0
     };
     
-<<<<<<< HEAD
-    // Preparar dados para gráficos (formato otimizado para o frontend)
-    const chartData = {
-      timeline: dailyMetrics.map(day => ({
-        date: new Date(day.date).toLocaleDateString('pt-BR', { 
-          day: '2-digit',
-          month: '2-digit'
-        }),
-=======
     const chartData = {
       timeline: dailyMetrics.map(day => ({
         date: new Date(day.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
         fullDate: day.date,
         enviados: day.sentCount,
         aberturas: day.openCount,
@@ -237,16 +138,9 @@ const getDashboardMetrics = async (req, res) => {
         cliquesUnicos: day.uniqueClickCount,
         isRealTime: day.isRealTime
       })),
-<<<<<<< HEAD
-      byAccount: [] // Será preenchido abaixo
-    };
-    
-    // Processar métricas agregadas por conta para o gráfico de contas
-=======
       byAccount: []
     };
     
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     const accountTotalsMap = new Map();
     
     dailyMetrics.forEach(day => {
@@ -258,17 +152,7 @@ const getDashboardMetrics = async (req, res) => {
             id: accountData.id,
             name: accountData.name,
             provider: accountData.provider,
-<<<<<<< HEAD
-            sentCount: 0,
-            openCount: 0,
-            uniqueOpenCount: 0,
-            clickCount: 0,
-            uniqueClickCount: 0,
-            bounceCount: 0,
-            unsubscribeCount: 0
-=======
             sentCount: 0, openCount: 0, uniqueOpenCount: 0, clickCount: 0, uniqueClickCount: 0, bounceCount: 0, unsubscribeCount: 0
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
           });
         }
         
@@ -283,10 +167,6 @@ const getDashboardMetrics = async (req, res) => {
       });
     });
     
-<<<<<<< HEAD
-    // Converter para array e calcular taxas por conta
-=======
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     chartData.byAccount = Array.from(accountTotalsMap.values()).map(account => ({
       id: account.id,
       name: account.name.substring(0, 15),
@@ -302,10 +182,6 @@ const getDashboardMetrics = async (req, res) => {
       ctr: account.openCount > 0 ? (account.clickCount / account.openCount) * 100 : 0
     }));
     
-<<<<<<< HEAD
-    // Estatísticas adicionais
-=======
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     const stats = {
       totalAccounts: accounts.length,
       daysInPeriod: dailyMetrics.length,
@@ -316,51 +192,6 @@ const getDashboardMetrics = async (req, res) => {
       }
     };
     
-<<<<<<< HEAD
-    const response = {
-      success: true,
-      data: {
-        // Totais do período (substituem os cálculos complexos do frontend)
-        totals: periodTotals,
-        
-        // Taxas calculadas (substituem os cálculos do frontend)
-        rates: periodRates,
-        
-        // Dados para gráficos já formatados
-        chartData,
-        
-        // Informações do período
-        period: {
-          startDate: start.toISOString().split('T')[0],
-          endDate: end.toISOString().split('T')[0],
-          days: dailyMetrics.length
-        },
-        
-        // Estatísticas adicionais
-        stats,
-        
-        // Controle de estado
-        isFiltered: !!(startDate && endDate),
-        accountsIncluded: accountIds ? accountIds.split(',').length : accounts.length,
-        
-        // Metadados para cache/debug
-        generatedAt: new Date().toISOString(),
-        version: '1.0.0'
-      }
-    };
-    
-    console.log(`✅ [DASHBOARD] Processamento concluído:`);
-    console.log(`   - Enviados: ${periodTotals.sentCount}`);
-    console.log(`   - Aberturas: ${periodTotals.openCount} (${periodRates.openRate.toFixed(1)}%)`);
-    console.log(`   - Cliques: ${periodTotals.clickCount} (${periodRates.clickRate.toFixed(1)}%)`);
-    console.log(`   - Contas: ${stats.totalAccounts}`);
-    console.log(`   - Dias: ${stats.daysInPeriod}`);
-    
-    return responseUtils.success(res, response.data);
-    
-  } catch (err) {
-    console.error('❌ [DASHBOARD] Erro ao processar:', err);
-=======
     console.log('[DASHBOARD] Processamento concluído:', periodTotals.sentCount, 'enviados');
     
     return responseUtils.success(res, {
@@ -381,15 +212,8 @@ const getDashboardMetrics = async (req, res) => {
     
   } catch (err) {
     console.error('[DASHBOARD] Erro:', err);
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
     return responseUtils.serverError(res, err);
   }
 };
 
-<<<<<<< HEAD
-module.exports = {
-  getDashboardMetrics
-};
-=======
 module.exports = { getDashboardMetrics };
->>>>>>> 8a3fee211a1f68c0942aae00b3498b11a4eff1bf
